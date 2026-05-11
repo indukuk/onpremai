@@ -549,12 +549,145 @@ tools:
   - `GET /ready` — readiness (RAG loaded)
 - Input/output format unchanged from V3 (backward compatible with existing frontend)
 
-### R10: Graph Structure (unchanged logic, new wiring)
+### R10: Graph Structure (updated with evidence preprocessing)
 
 ```
-router → discovery → confirmation → extractor → evaluation → sandbox → code_fixer → storage → formatter
-                                              ↘ query → sandbox_query → formatter
-                                              ↘ chat_respond
+router → discovery → confirmation → extractor → evidence_prep → evaluation → sandbox → code_fixer → storage → formatter
+                                                                ↘ query → sandbox_query → formatter
+                                                                ↘ chat_respond
+```
+
+### R10b: Evidence Preprocessing Node
+
+**Problem:** Raw evidence comes in forms that the evaluation node can't reason about:
+- PDFs with diagrams, tables, flowcharts → need VLM to describe visual elements
+- Screenshots/images → need VLM to extract text and describe what's shown
+- Multi-sheet Excel files → need flattening into queryable structure
+- Scanned documents → need OCR + layout understanding
+
+The evaluation node expects: clean text, structured data, and described visuals. It should NOT waste LLM tokens on visual interpretation — that's a separate preprocessing step.
+
+**Solution:** An `evidence_prep` node that runs BETWEEN extractor and evaluation. It transforms raw evidence into evaluation-ready form. Crucially: **it only runs if preprocessing hasn't already been done** (results are cached per evidence file hash).
+
+#### What evidence_prep does per file type:
+
+| Evidence type | Preprocessing needed | LLM task used | Output |
+|---------------|---------------------|:-------------:|--------|
+| **PDF with text only** | None (already extracted by preprocessor) | — | Pass through |
+| **PDF with tables** | VLM extracts tables into structured format | `describe_visual` (mid) | Markdown tables + description |
+| **PDF with diagrams/flowcharts** | VLM describes the diagram's meaning | `describe_visual` (mid) | Text description of what diagram shows |
+| **Screenshots** | VLM describes what's shown (UI, config, dashboard) | `describe_visual` (mid) | "Screenshot shows AWS IAM console with MFA enabled for all users" |
+| **Images (certs, badges)** | VLM reads text and identifies document type | `describe_visual` (fast) | "ISO 27001 certificate issued to Acme Corp, valid until 2027-03" |
+| **Excel (single sheet, clean)** | None (schema already extracted by preprocessor) | — | Pass through |
+| **Excel (multi-sheet, pivots)** | Flatten into single queryable structure, describe relationships | `extract_schema` (fast) | Flattened CSV + sheet relationship description |
+| **Excel (merged cells, complex layout)** | Interpret layout, extract logical tables | `describe_visual` (mid) | Clean structured data + layout explanation |
+| **Word/PowerPoint** | Already text-extracted by preprocessor | — | Pass through |
+
+#### Skip condition (critical for efficiency):
+
+```python
+def evidence_prep(state: AgentState) -> dict:
+    evidence = state["evidence"]
+    prepared = []
+    
+    for e in evidence:
+        # Check if this file was already preprocessed (cached)
+        prep_key = f"prep/{e['s3_key']}.json"
+        cached = storage.get_json(prep_key)
+        
+        if cached and cached["source_hash"] == hash(e["s3_key"] + e.get("content_hash", "")):
+            # Already preprocessed — use cached result
+            prepared.append({**e, **cached["prepared_fields"]})
+            continue
+        
+        # Needs preprocessing
+        if needs_vlm(e):
+            result = preprocess_with_vlm(e)
+        elif needs_flattening(e):
+            result = flatten_excel(e)
+        else:
+            result = e  # pass through
+        
+        # Cache the result
+        storage.put_json(prep_key, {
+            "source_hash": hash(e["s3_key"] + e.get("content_hash", "")),
+            "prepared_fields": result,
+            "prepared_at": datetime.utcnow().isoformat(),
+        })
+        
+        prepared.append(result)
+    
+    return {"evidence": prepared}
+```
+
+#### What VLM preprocessing produces:
+
+For a PDF with a network diagram:
+```json
+{
+  "source": "network_architecture.pdf",
+  "evidence_type": "unstructured",
+  "extracted_text": "... original text ...",
+  "visual_descriptions": [
+    {
+      "page": 3,
+      "type": "diagram",
+      "description": "Network segmentation diagram showing 3 VPCs: production (10.0.0.0/16), staging (10.1.0.0/16), development (10.2.0.0/16). Firewall rules between zones shown. Internet-facing only through ALB in production VPC. Database tier has no direct internet access.",
+      "compliance_relevance": "Demonstrates network segmentation and access control layers"
+    }
+  ],
+  "tables_extracted": [
+    {
+      "page": 5,
+      "title": "Firewall Rules Summary",
+      "data": [
+        {"source": "internet", "destination": "ALB", "port": "443", "action": "allow"},
+        {"source": "ALB", "destination": "app-tier", "port": "8080", "action": "allow"}
+      ]
+    }
+  ]
+}
+```
+
+For a screenshot of an AWS console:
+```json
+{
+  "source": "aws_mfa_config.png",
+  "evidence_type": "unstructured",
+  "extracted_text": "",
+  "visual_descriptions": [
+    {
+      "type": "screenshot",
+      "description": "AWS IAM console showing 'Account Settings' page. 'Require MFA for all IAM users' is toggled ON (green). Password policy shows: minimum 14 characters, require symbols, expire after 90 days. Last modified: 2026-01-15.",
+      "compliance_relevance": "Demonstrates MFA enforcement and password policy configuration"
+    }
+  ]
+}
+```
+
+#### LLM task types for evidence_prep:
+
+| Task | Tier | When used |
+|------|:----:|-----------|
+| `describe_visual` | mid | PDFs with diagrams/tables, screenshots, images with complex content |
+| `describe_visual_simple` | fast | Certificates, simple images with text, badges |
+| `extract_schema` | fast | Complex Excel interpretation |
+
+#### Why this is a separate node (not part of extractor or evaluation):
+
+1. **Caching**: VLM calls are expensive. Cache per file hash. Don't re-describe the same screenshot every evaluation.
+2. **Separation of concerns**: Extractor loads files. Prep interprets visuals. Evaluation assesses compliance. Clean boundaries.
+3. **Different model needs**: Prep needs a VLM (vision model). Evaluation needs a text reasoning model. Different capabilities.
+4. **Skip on re-evaluation**: If evidence files haven't changed, prep is 100% cache hits — zero LLM cost, instant.
+5. **Batch-friendly**: In batch mode (40 controls), many controls share evidence files. Prep once, evaluate many times.
+
+#### Graph with skip logic:
+
+```
+extractor → [evidence_prep] → evaluation
+                 │
+                 ├── all files cached? → skip (instant) → evaluation
+                 └── some need VLM? → call VLM per file → cache → evaluation
 ```
 
 - All nodes use `LLMClient` instead of `ChatBedrock`

@@ -51,6 +51,7 @@ A compliance SaaS platform with AI agents that deploy on-prem, in the cloud, or 
 | [sandbox-service.md](./sandbox-service.md) | Isolated code execution for any agent |
 | [mcp-server.md](./mcp-server.md) | MCP module on backend — tools/resources/prompts, feature-flagged |
 | [common-libraries.md](./common-libraries.md) | Shared client libraries (LLM, memory, storage) |
+| [observability.md](./observability.md) | Logging, startup diagnostics, failure correlation, health checks |
 | [deployment.md](./deployment.md) | Docker Compose architecture, upgrades, air-gap |
 
 ## Key Design Principles

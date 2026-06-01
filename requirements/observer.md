@@ -281,7 +281,86 @@ NOTIFY_ON_ROLLBACK: true
 NOTIFY_ON_CIRCUIT_BREAK: true
 ```
 
-### R16: What Observer DOES NOT Do
+### R16: AI Model Risk Governance (Self-Assessment)
+
+The system deploys AI models for compliance evaluation — which itself is subject to model risk regulation (SR 11-7, EU AI Act, ECB guidelines). The observer monitors and documents the AI system's own model risk, making the system auditable for AI governance.
+
+#### Why this matters:
+
+Financial services customers under SR 11-7 and EU AI Act must demonstrate governance over AI/ML models used in risk and compliance decisions. Since agent-eval produces compliance assessments that feed audit opinions, it IS a model that needs governance. This is a competitive differentiator — the system governs itself.
+
+#### What observer tracks:
+
+**Model Inventory (automated):**
+- All models in `routing.yaml` are automatically inventoried
+- Per model: provider, version, tasks routed to it, deployment date, last health check
+- Model changes tracked over time (when models were added, swapped, removed)
+- Exposed via: `GET /observer/model-inventory`
+
+**Model Performance Metrics (continuous):**
+- Per model, per task:
+  - Accuracy proxy: confidence scores over time (trend, distribution)
+  - Consistency: same input → same output (measured via evidence hash caching)
+  - Escalation rate: how often this model's output requires escalation
+  - Parse success rate: structured output compliance
+  - Drift detection: confidence distribution shifting over time (KS test on weekly windows)
+- Exposed via: `GET /observer/model-performance/{model_id}`
+
+**Decision Audit Trail:**
+- Every observer action (routing change, prompt rewrite, model swap) is an auditable decision
+- Stored with: rationale, evidence (metrics that triggered it), outcome, rollback status
+- This IS the model change management log auditors need
+- Exposed via: `GET /observer/changes` (already exists in R11)
+
+**Bias and Fairness Monitoring:**
+- Per tenant: track if evaluation scores systematically differ across similar evidence sets
+- Flag if a model consistently scores one tenant's evidence lower than comparable evidence from others
+- Not a full fairness framework — a signal that something may need investigation
+- Threshold: >15% score variance across comparable evaluations triggers alert
+
+**Model Validation Reports (periodic):**
+- Weekly automated report: model health, drift indicators, performance trends
+- Monthly automated report: full model inventory, changes made, validation results
+- Format: structured JSON (consumed by platform for dashboard display) + human-readable summary
+- Stored in memory: `memory.eval_store(type="model_governance_report")`
+- Exposed via: `GET /observer/governance-report?period=weekly|monthly`
+
+#### Observer admin API additions:
+
+```
+GET  /observer/model-inventory
+  → all models with metadata, status, tasks, last validated
+
+GET  /observer/model-performance/{model_id}
+  → performance metrics over configurable time window
+
+GET  /observer/governance-report?period=weekly|monthly
+  → latest model governance report
+
+GET  /observer/drift-alerts
+  → active drift/bias alerts requiring attention
+```
+
+#### Configuration additions:
+
+```yaml
+# Model Risk Governance
+MODEL_GOVERNANCE_ENABLED: true
+DRIFT_DETECTION_WINDOW_DAYS: 7
+DRIFT_THRESHOLD_KS_PVALUE: 0.05        # KS test p-value threshold
+BIAS_VARIANCE_THRESHOLD: 0.15           # flag >15% cross-tenant variance
+GOVERNANCE_REPORT_WEEKLY: true
+GOVERNANCE_REPORT_MONTHLY: true
+```
+
+#### How this helps customers:
+
+- **For SR 11-7**: model inventory, performance monitoring, change management, validation evidence
+- **For EU AI Act**: risk classification documentation, monitoring of high-risk AI system, human oversight records
+- **For auditors**: "Show me your AI governance" → point them at `/observer/governance-report`
+- **For internal teams**: early warning when models degrade, before it affects evaluation quality
+
+### R17: What Observer DOES NOT Do
 
 - Does NOT modify agent source code
 - Does NOT redeploy containers

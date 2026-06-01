@@ -113,6 +113,8 @@ router → discovery → confirmation → extractor → evaluation → sandbox �
 | `cross_framework_analysis` | strong | Complex multi-framework reasoning |
 | `chat_response` | fast | Answer user questions |
 | `format_results` | fast | Format evaluation output |
+| `summarize_evidence` | fast | Summarize a single evidence document |
+| `regulatory_impact_analysis` | mid | Map regulatory changes to affected controls |
 
 ### R12: Code Sandbox Integration
 

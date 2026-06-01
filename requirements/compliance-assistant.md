@@ -694,3 +694,115 @@ TOOL_TIMEOUT_SEC: 10
   3. User confirms → agent calls `tools/call` again with `confirmed: true`
   4. User cancels → agent acknowledges, logs the cancellation
 - Agent MUST show the MCP server's summary text to user (not generate its own)
+
+### R15: Regulatory Change Monitoring Skill
+
+The agent proactively monitors regulatory changes and alerts users when changes may affect their compliance posture. This is implemented as a skill with multi-step execution, not a separate service.
+
+#### Skill definition:
+
+```yaml
+skill:
+  id: "cm/regulatory_change_monitor"
+  role: [admin, compliance_manager]
+  triggers: ["regulatory change", "regulation update", "what changed", "new requirements"]
+  proactive: true  # agent raises this without being asked
+  schedule: daily  # observer triggers this skill daily for each active tenant
+  system_prompt: |
+    You monitor regulatory changes that affect this tenant's compliance posture.
+    When a change is detected:
+    1. Identify which controls/frameworks are affected
+    2. Assess impact severity (critical/moderate/informational)
+    3. Notify the appropriate user based on severity
+    4. Suggest remediation steps or re-evaluation
+  tools_needed: [regulatory.check_feed, regulatory.map_to_controls, evaluation.invalidate_cache, escalation.notify_user]
+```
+
+#### How it works:
+
+1. **Feed ingestion**: The platform provides regulatory feed data (RSS, API, or manual upload) via MCP resources. The skill reads from `resources://regulatory/feed/{framework}`
+2. **Change detection**: Agent compares current regulatory text against the version stored in memory (`memory.skill_get("regulatory/{framework}/version")`)
+3. **Impact mapping**: When changes are detected, agent uses LLM (`task="regulatory_impact_analysis"`) to map changed clauses to affected controls
+4. **Proactive notification**: Agent alerts relevant users:
+   - Critical (new mandatory requirement): immediate notification to compliance manager + admin
+   - Moderate (existing requirement clarified/tightened): next-session alert to compliance manager
+   - Informational (guidance update, no enforcement change): logged, shown on request
+5. **Evaluation invalidation**: For affected controls, agent calls `evaluation.invalidate_cache` to force re-evaluation with updated criteria
+6. **Audit trail**: All change detections and impact assessments stored in memory (`memory.eval_store` with type="regulatory_change")
+
+#### Task types added:
+
+| Task | Tier | Purpose |
+|------|:----:|---------|
+| `regulatory_impact_analysis` | mid | Map regulatory text changes to affected controls |
+| `regulatory_change_summary` | fast | Summarize what changed in human-readable form |
+
+#### Proactive behavior:
+
+- On daily schedule (triggered by observer): skill runs for each tenant with active frameworks
+- Checks each framework's regulatory feed for changes since last check
+- If changes found: creates a pending notification for the next user session
+- On user login: if pending regulatory changes exist, agent opens with: "Heads up — {framework} had updates on {date} that affect {n} of your controls. Want me to walk through the impact?"
+
+#### Memory integration:
+
+- `memory.skill_get("regulatory/{framework}/last_checked")` — when last checked
+- `memory.skill_get("regulatory/{framework}/version_hash")` — hash of last known regulatory text
+- `memory.tenant_remember()` — records "Regulatory change detected on {date}: {summary}"
+- `memory.eval_store()` — stores impact assessment for audit trail
+
+### R16: Evidence Summarization Skill
+
+The agent can summarize evidence documents on demand or as part of evaluation prep. Uses the 3-layer approach: extract structure deterministically first, then LLM summarizes only what requires judgment.
+
+#### Skill definition:
+
+```yaml
+skill:
+  id: "shared/evidence_summarization"
+  role: [compliance_manager, auditor, contributor]
+  triggers: ["summarize", "what does this show", "explain this evidence", "evidence summary"]
+  system_prompt: |
+    Summarize evidence documents for the user. Focus on:
+    1. What the document proves (which control requirements it addresses)
+    2. Key data points (dates, counts, coverage)
+    3. Gaps or weaknesses the auditor would notice
+    4. Freshness (is this evidence current enough?)
+  tools_needed: [evidence.get_metadata, evidence.get_content, preprocessor.summarize]
+```
+
+#### How it works:
+
+1. **Deterministic extraction first** (via preprocessor metadata):
+   - File type, size, date range covered
+   - For structured data: row count, column names, null rates, date range
+   - For documents: page count, section headings, key terms found
+   - This metadata is already available from the preprocessor — no LLM needed
+
+2. **LLM summarization** (only when user requests or during audit prep):
+   - Agent calls LLM (`task="summarize_evidence"`) with metadata + content excerpt
+   - Produces: what the evidence proves, what's missing, freshness assessment
+   - For structured data: key statistics, anomalies, coverage gaps
+   - For unstructured (PDF/Word): main conclusions, policy commitments, gaps
+
+3. **Context-aware summaries** (different per role):
+   - **Auditor**: focuses on sufficiency, testing procedures, sample adequacy
+   - **Compliance manager**: focuses on gaps, next steps, readiness impact
+   - **Contributor**: focuses on "is this good enough?" with specific guidance
+
+4. **Batch summarization** (for audit prep):
+   - Compliance manager or auditor can request: "Summarize all evidence for CC6.x controls"
+   - Agent iterates through evidence files, produces per-control summary
+   - Final output: evidence coverage report with gaps highlighted
+
+#### Task types added:
+
+| Task | Tier | Purpose |
+|------|:----:|---------|
+| `summarize_evidence` | fast | Summarize a single evidence document |
+| `batch_evidence_summary` | mid | Summarize evidence across multiple controls |
+
+#### Integration with agent-eval:
+
+- During evaluation (Layer 2), if LLM needs to judge unstructured evidence, the summarization output can be used as pre-processed input — reducing token usage and improving consistency
+- Evidence summaries are cached in memory (`memory.eval_store` with type="evidence_summary") and reused until evidence hash changes

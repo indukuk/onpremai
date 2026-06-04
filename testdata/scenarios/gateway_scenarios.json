@@ -1,0 +1,27 @@
+[
+  {
+    "name": "normal_routing",
+    "task": "evaluate_control",
+    "tenant": "tenant-acme-corp",
+    "expected_tier": "mid"
+  },
+  {
+    "name": "escalation",
+    "task": "evaluate_control",
+    "tenant": "tenant-acme-corp",
+    "confidence": 0.3,
+    "expected": "escalates to strong"
+  },
+  {
+    "name": "budget_degraded",
+    "task": "evaluate_control",
+    "tenant": "tenant-initech",
+    "expected": "LLMCreditExhaustedError level 4"
+  },
+  {
+    "name": "canary_routing",
+    "task": "evaluate_control",
+    "tenant": "tenant-acme-corp",
+    "expected": "10% to canary model"
+  }
+]

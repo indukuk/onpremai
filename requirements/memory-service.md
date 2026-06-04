@@ -6,6 +6,22 @@ Shared memory layer for all agents. Stores tenant knowledge, evaluation history,
 
 No agent has its own memory silo. The memory service is the only persistence layer agents interact with (besides the LLM gateway for inference).
 
+## System Requirements Covered
+
+| System Requirement | This module's role | Requirement ID |
+|---|---|---|
+| AWS-First w/ Adapters | RDS PostgreSQL + ElastiCache (same engine as local) | R11, R12 |
+| Graceful Degradation | Stores without embedding if LLM down, flags for retry | R8 |
+| PII-Aware Logging | Audit trail stores full unredacted data (access-controlled, append-only) | R7 |
+| Memory is Shared | Single source of truth — sessions, user/tenant facts, evals, patterns, skills | R1-R7 |
+| Shadow AI per User | Stores per-user preferences, behavior, responsibilities | R2 |
+| Deterministic First | Evidence hash in eval history enables 100% cache-hit on unchanged evidence | R5 |
+| Skills & Playbooks | Stores versioned skills with canary/active lifecycle, metrics per version | R5 |
+| Self-Improving | Stores patterns and skills that observer creates/updates | R4, R5 |
+| Self-Governing | Stores model governance reports as eval history entries | R5 |
+| Multi-Tenant Isolation | tenant_id enforced on all queries, no cross-tenant reads, admin scope for observer | R9 |
+| Independent Deploy | Own image, MEMORY_VERSION tag, runs migrations on startup | R11 |
+
 ## Core Responsibilities
 
 1. Session state: short-term conversation context (Redis-backed)
@@ -279,8 +295,9 @@ No agent has its own memory silo. The memory service is the only persistence lay
 - Memory service generates embeddings for semantic search
 - Calls LLM gateway `/v1/embed` endpoint (does not embed locally)
 - Embeddings stored as pgvector columns
-- Dimension: configurable (default 1024, matches nomic-embed-text)
+- Dimension: configurable (default 1024, matches Amazon Titan Embed v2)
 - If embedding service unavailable: store without embedding, flag for retry
+- If LLM credits exhausted: store without embedding (still searchable by exact match), queue for embedding when credits return
 
 ### R9: Data Isolation
 
@@ -311,22 +328,27 @@ No agent has its own memory silo. The memory service is the only persistence lay
 ### R12: Configuration
 
 ```yaml
-# Environment variables
-DB_HOST: postgres
+# Environment variables (AWS-first defaults — RDS PostgreSQL + ElastiCache Redis)
+DB_HOST: ${RDS_ENDPOINT}              # e.g., compliance-db.cluster-xyz.us-east-1.rds.amazonaws.com
 DB_PORT: 5432
 DB_NAME: compliance_memory
 DB_USER: memory_svc
 DB_PASSWORD: ${MEMORY_DB_PASSWORD}
-REDIS_URL: redis://redis:6379/0
+REDIS_URL: redis://${ELASTICACHE_ENDPOINT}:6379/0
 LLM_GATEWAY_URL: http://llm-gateway:4000
-EMBEDDING_DIMENSION: 1024
+AWS_REGION: us-east-1
+EMBEDDING_DIMENSION: 1024              # matches Amazon Titan Embed v2
 SESSION_TTL_HOURS: 4
 INTERACTION_RETENTION_DAYS: 90
-PATTERN_DECAY_DAYS: 90          # unused patterns lose confidence after this
-PATTERN_DECAY_RATE: 0.1         # confidence reduction per decay period
+PATTERN_DECAY_DAYS: 90
+PATTERN_DECAY_RATE: 0.1
 DEDUP_SIMILARITY_THRESHOLD: 0.9
 LOG_LEVEL: info
 PORT: 5000
+
+# Local development overrides:
+# DB_HOST: postgres
+# REDIS_URL: redis://redis:6379/0
 ```
 
 ### R13: Schema (PostgreSQL)

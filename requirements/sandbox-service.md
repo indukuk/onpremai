@@ -4,6 +4,18 @@
 
 Isolated code execution service. Any agent submits Python code + data references, gets stdout/stderr back. Runs untrusted LLM-generated code safely in ephemeral containers with no network access, no persistence, and strict resource limits.
 
+## System Requirements Covered
+
+| System Requirement | This module's role | Requirement ID |
+|---|---|---|
+| Storage Agnostic | Downloads evidence files from S3/MinIO via StorageClient | R3 |
+| AWS-First w/ Adapters | S3 for file downloads, same adapter as other services | R10 |
+| Graceful Degradation | Returns success=false on failure (never crashes caller) | R1 |
+| PII-Aware Logging | All logs via AgentLogger, execution logs PII-free | R8 |
+| Observability | Logs each execution with duration, memory, timeout, OOM stats | R8 |
+| Security Isolation | Ephemeral containers, no network, no secrets, allowlisted imports only | R2, R6 |
+| Independent Deploy | Own image (service + runtime), SANDBOX_VERSION tag | R9 |
+
 ## Why a Separate Service
 
 - **Security isolation**: LLM-generated code is untrusted. Running it inside an agent container means a malicious/buggy script can access agent memory, env vars, secrets, or network. Separate container = blast radius is zero.
@@ -198,11 +210,10 @@ Configurable — pick one based on deployment:
 ### R10: Configuration
 
 ```yaml
-# Environment variables
-STORAGE_ENDPOINT: http://minio:9000
+# Environment variables (AWS-first defaults)
+STORAGE_BACKEND: s3
 STORAGE_BUCKET: compliance-artifacts
-STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY}
-STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY}
+AWS_REGION: us-east-1
 EXECUTION_BACKEND: docker          # docker | nsjail | subprocess
 DOCKER_SOCKET: /var/run/docker.sock
 RUNTIME_IMAGE: yourorg/compliance-sandbox-runtime:latest
@@ -217,6 +228,12 @@ MAX_TOTAL_FILE_SIZE_MB: 100
 QUEUE_SIZE: 20                     # max queued requests before 429
 LOG_LEVEL: info
 PORT: 9000
+
+# Local development overrides:
+# STORAGE_BACKEND: minio
+# STORAGE_ENDPOINT: http://minio:9000
+# STORAGE_ACCESS_KEY: minioadmin
+# STORAGE_SECRET_KEY: minioadmin
 ```
 
 ### R11: Docker Compose Integration

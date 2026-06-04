@@ -1,0 +1,115 @@
+# LLM Gateway Routing Configuration
+# Hot-reloaded on file change — no restart required.
+
+# Tier-to-model mappings
+tiers:
+  fast:
+    provider: bedrock
+    model: anthropic.claude-3-haiku-20240307-v1:0
+    max_tokens: 4096
+    temperature: 0.0
+    timeout_seconds: 30
+  mid:
+    provider: bedrock
+    model: anthropic.claude-3-5-sonnet-20241022-v2:0
+    max_tokens: 8192
+    temperature: 0.0
+    timeout_seconds: 60
+  strong:
+    provider: bedrock
+    model: anthropic.claude-3-5-sonnet-20241022-v2:0
+    max_tokens: 16384
+    temperature: 0.0
+    timeout_seconds: 120
+
+# Task-to-tier routing (default when no agent/tenant override)
+tasks:
+  # agent-eval tasks
+  evaluate_control:
+    tier: mid
+    description: "Layer 2 LLM judgment for control evaluation"
+  evaluate_control_complex:
+    tier: strong
+    description: "Complex multi-evidence control evaluation"
+  summarize_findings:
+    tier: fast
+    description: "Summarize evaluation findings into bullet points"
+  generate_recommendations:
+    tier: mid
+    description: "Generate remediation recommendations"
+
+  # compliance-assistant tasks
+  chat_response:
+    tier: fast
+    description: "Conversational responses to user queries"
+  skill_execution:
+    tier: mid
+    description: "Execute compliance skills (gap analysis, policy drafting)"
+  policy_generation:
+    tier: strong
+    description: "Generate full compliance policy documents"
+  evidence_classification:
+    tier: fast
+    description: "Classify uploaded evidence by type and framework"
+
+  # preprocessor tasks
+  extract_metadata:
+    tier: fast
+    description: "Extract structured metadata from documents"
+  document_summarization:
+    tier: mid
+    description: "Summarize large documents for context storage"
+
+  # observer tasks
+  pattern_analysis:
+    tier: mid
+    description: "Analyze usage patterns and detect anomalies"
+  routing_optimization:
+    tier: fast
+    description: "Suggest routing config optimizations"
+
+# Escalation rules: if confidence < threshold, escalate to next tier
+escalation:
+  enabled: true
+  confidence_threshold: 0.7
+  chain:
+    fast: mid
+    mid: strong
+    strong: null  # no further escalation
+
+# Agent-level overrides (override task defaults for specific agents)
+agent_overrides:
+  agent-eval:
+    evaluate_control:
+      tier: strong  # agent-eval always uses strong for control evaluation
+  observer:
+    pattern_analysis:
+      tier: fast  # observer uses fast to save cost on analysis
+
+# Tenant-level overrides (highest priority — override everything)
+# These are loaded from memory-service at runtime; this section is for bootstrap/dev only
+tenant_overrides:
+  demo-tenant:
+    evaluate_control:
+      tier: fast  # demo tenant uses cheapest tier
+    policy_generation:
+      tier: mid  # cap demo tenant at mid tier
+
+# Rate limiting
+rate_limits:
+  per_tenant:
+    requests_per_minute: 60
+    tokens_per_minute: 100000
+  per_agent:
+    requests_per_minute: 120
+    tokens_per_minute: 200000
+
+# Budget tracking
+budget:
+  enabled: true
+  default_monthly_limit_usd: 100.00
+  alert_thresholds:
+    - 0.50  # alert at 50% usage
+    - 0.80  # alert at 80% usage
+    - 0.95  # alert at 95% usage
+  exhaustion_behavior: cascade  # cascade | queue | reject

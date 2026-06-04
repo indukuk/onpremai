@@ -1,0 +1,28 @@
+{
+  "tenants": [
+    {
+      "id": "tenant-acme-corp",
+      "name": "Acme Corporation",
+      "plan": "enterprise",
+      "frameworks": ["SOC2", "ISO27001"],
+      "audit_date": "2026-09-15",
+      "budget": {"monthly_usd": 500, "used_usd": 120}
+    },
+    {
+      "id": "tenant-globex-inc",
+      "name": "Globex Inc",
+      "plan": "standard",
+      "frameworks": ["SOC2"],
+      "audit_date": "2026-07-01",
+      "budget": {"monthly_usd": 50, "used_usd": 48}
+    },
+    {
+      "id": "tenant-initech",
+      "name": "Initech",
+      "plan": "free",
+      "frameworks": ["SOC2"],
+      "audit_date": "2026-12-01",
+      "budget": {"monthly_usd": 5, "used_usd": 5}
+    }
+  ]
+}

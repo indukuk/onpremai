@@ -8,6 +8,15 @@ Every service in the system must be debuggable at two levels:
 
 This document defines the logging, health-check, and diagnostic requirements that apply across ALL services.
 
+## System Requirements Covered
+
+| System Requirement | This document's role | Section |
+|---|---|---|
+| PII-Aware Logging | Defines two-stream model (operational=PII-free, audit=full) | R6 |
+| Observability | Structured log format, trace_id propagation, health/ready/diagnostics endpoints | R6-R9 |
+| Graceful Degradation | Startup dependency checks (REQUIRED vs OPTIONAL), fix hints | R3-R4 |
+| Independent Deploy | Health checks gate container readiness, per-service startup sequences | R1-R2, R9 |
+
 ---
 
 ## Part 1: Installation & Startup Logging
@@ -157,7 +166,7 @@ docker compose exec compliance-assistant python -m diagnostics
 
 ### R6: Structured Log Format (all services)
 
-Every log line is structured JSON (parsed by log aggregators, searched by operators):
+Every log line is structured JSON (parsed by log aggregators, searched by operators). **All operational logs are PII-free** — see `common/logger.py` PII-aware logging in [common-libraries.md](./common-libraries.md).
 
 ```json
 {
@@ -178,13 +187,33 @@ Every log line is structured JSON (parsed by log aggregators, searched by operat
     "control_id": "CC6.1",
     "framework": "soc2",
     "task": "evaluate_control",
-    "model_attempted": "vllm-70b",
+    "model_attempted": "sonnet-bedrock",
     "retries": 3,
     "latency_ms": 120000
   },
   "impact": "Evaluation will use cached result or return insufficient_evidence"
 }
 ```
+
+#### PII Safety in Operational Logs
+
+All services use `common.logger.AgentLogger` which enforces PII safety:
+
+1. **Explicit PII fields** (`PII()` wrapper): hashed with HMAC-SHA256 in operational logs, full value only in audit trail
+2. **Automatic regex redaction**: emails, phone numbers, SSN, card numbers scrubbed from free-text message fields
+3. **Safe field allowlist**: only known-safe fields (control_id, trace_id, duration_ms, etc.) pass through unmodified
+4. **Unknown fields**: redacted in production, warned in development
+
+| Log stream | PII | Destination | Consumers |
+|-----------|-----|-------------|-----------|
+| Operational (stdout) | Redacted/hashed | Container logs, log aggregator | Observer, ops team, CloudWatch |
+| Audit trail | Full (unredacted) | Memory service (append-only, access-controlled) | Compliance auditors, authorized admins |
+
+**This means:**
+- `docker compose logs` output is safe to share with support or paste in tickets
+- Observer log ingestion never sees raw user emails, names, or sensitive data
+- Audit trail preserves full accountability chain (who did what, with real identifiers)
+- Same PII value produces the same hash — enables cross-log correlation without exposure
 
 ### R7: Error Classification
 
@@ -257,6 +286,8 @@ GET /diagnostics → detailed status (for debugging)
 |---------|----------------------|-------------|--------|
 | LLM model timeout | llm-gateway | model_id, task, timeout_ms, will_retry | Retries at same tier or escalates |
 | All models in tier down | llm-gateway | tier, models_attempted, escalating_to | Escalates or returns error |
+| Tenant budget exhausted | llm-gateway | tenant_id, daily/monthly spent, degradation_level | Tier cascade → queue |
+| Provider credit exhausted | llm-gateway | provider, error_code, affected_tiers | Mark provider exhausted, try fallback |
 | Memory service unreachable | any agent | operation, fallback_used | Agent continues with empty context |
 | Storage unreachable | agent-eval, preprocessor | operation, file_key | Evaluation fails |
 | Sandbox timeout | sandbox-service | code_length, timeout_sec, memory_used | Execution fails, agent retries with code_fixer |
@@ -269,6 +300,7 @@ GET /diagnostics → detailed status (for debugging)
 | Docker socket error | sandbox-service | operation, error | All executions fail |
 | MCP tool fails | compliance-assistant | tool_name, error, will_retry | Tool result unavailable, agent tells user |
 | Evaluation criteria missing | agent-eval | control_id, framework | Falls back to LLM-only evaluation |
+| Textract throttled | preprocessor | fallback_to=tesseract, file_key | Uses Tesseract OCR instead |
 
 ### R11: Operator Alerts
 
@@ -278,11 +310,15 @@ Critical failures that need immediate attention send alerts (via observer notifi
 |-------|-----------|---------|
 | Service restart loop | Container restarted >3 times in 5 minutes | Critical |
 | All LLM models down | No model in any tier responding | Critical |
-| Database unreachable | PostgreSQL not responding for >30s | Critical |
-| Storage unreachable | MinIO not responding for >30s | Critical |
+| Database unreachable | PostgreSQL/RDS not responding for >30s | Critical |
+| Storage unreachable | S3/MinIO not responding for >30s | Critical |
 | High error rate | >10% of requests failing in 5 min window | High |
 | Sandbox all failing | >90% sandbox executions failing | High |
 | Disk space low | <10% remaining on any volume | High |
+| Tenant budget exceeded | Tenant enters degradation level 3+ | High |
+| Provider credits exhausted | Bedrock/Anthropic returning quota errors | High |
+| Queue depth growing | >50 queued requests for any tenant | Warning |
+| Budget warning | Tenant daily spend >80% of limit | Warning |
 | Memory pressure | Container using >90% memory limit | Warning |
 
 ---

@@ -1,0 +1,37 @@
+[
+  {
+    "name": "full_pass",
+    "tenant": "tenant-acme-corp",
+    "control": "CC8.1",
+    "expected_result": "compliant",
+    "description": "Monitoring evidence is complete and current"
+  },
+  {
+    "name": "partial_fail",
+    "tenant": "tenant-acme-corp",
+    "control": "CC6.1",
+    "expected_result": "partially_compliant",
+    "description": "Access control has terminated employee finding + MFA gap"
+  },
+  {
+    "name": "insufficient",
+    "tenant": "tenant-globex-inc",
+    "control": "CC6.1",
+    "expected_result": "insufficient_evidence",
+    "description": "Only 3 rows in access log"
+  },
+  {
+    "name": "credit_exhausted",
+    "tenant": "tenant-initech",
+    "control": "CC6.1",
+    "expected_result": "partial_evaluation",
+    "description": "Budget exhausted mid-evaluation, rules-only result"
+  },
+  {
+    "name": "cache_hit",
+    "tenant": "tenant-acme-corp",
+    "control": "CC8.1",
+    "expected_result": "cached",
+    "description": "Evidence unchanged since last eval, return cached"
+  }
+]

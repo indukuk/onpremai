@@ -6,6 +6,21 @@ Single entry point for all LLM calls across the system. Routes requests to appro
 
 No agent ever talks to an LLM directly — they all go through this gateway.
 
+## System Requirements Covered
+
+| System Requirement | This module's role | Requirement ID |
+|---|---|---|
+| LLM Agnostic | Resolves task→tier→model via 3-level routing hierarchy | R3, R4, R4b |
+| AWS-First w/ Adapters | BedrockAdapter primary, Anthropic/OpenAI-compatible fallback | R8, R17 |
+| Per-Tenant Budget | Tracks cost/tenant, enforces daily/monthly ceiling, queues indefinitely | R16 |
+| Graceful Degradation | Fallback within tier, escalate across tiers, then queue | R5 |
+| PII-Aware Logging | Operational logs PII-free, prompt/response logging configurable | R9 |
+| Observability | Logs every request with full metrics JSON for observer consumption | R9 |
+| Self-Improving | Admin API accepts routing/threshold/canary updates from observer | R11 |
+| Hot-Reload Config | File watcher on routing.yaml, admin API for programmatic updates | R14 |
+| Multi-Tenant Isolation | Per-tenant rate limits, routing overrides, budget tracking | R12, R16 |
+| Independent Deploy | Own image, LLM_GW_VERSION tag, config mounted as volume | R15 |
+
 ## Core Responsibilities
 
 1. Task-based routing: map task names to model tiers
@@ -203,17 +218,19 @@ mid:
 - Response translation: normalize tool calls back to OpenAI format
 - This means agents work with ANY model — even ones without native function calling
 
-### R8: Provider Support
+### R8: Provider Support (Adapter-Based)
 
-- Ollama (local): chat completions + embeddings
-- vLLM (local): OpenAI-compatible API
-- Anthropic API (cloud): Messages API with tool use
-- OpenAI API (cloud): Chat completions with function calling
-- AWS Bedrock (cloud): Converse API
+**V1 adapters (shipped):**
+- AWS Bedrock (cloud, **primary**): Converse API — supports Claude, Titan, Llama on Bedrock
+- Anthropic API (cloud): Messages API with tool use — fallback when Bedrock throttles
+- OpenAI-compatible (generic): covers vLLM, Ollama, OpenRouter, any compatible endpoint
+
+**Future adapters (not V1):**
 - Azure OpenAI (cloud): Chat completions
 - Google Vertex AI (cloud): Gemini API
-- Any OpenAI-compatible endpoint (generic)
-- Adding a new provider: add adapter class, no gateway rewrite
+- Ollama-native (local): chat completions + embeddings (for on-prem profile)
+
+**Adapter interface:** each adapter implements `complete()`, `embed()`, `health_check()`, `estimate_cost()`. Adding a new provider: add adapter class, register in factory, no gateway core rewrite.
 
 ### R9: Logging (for Observer)
 
@@ -288,17 +305,18 @@ mid:
 
 ```yaml
 # config/routing.yaml (hot-reloadable)
+# AWS-first: Bedrock is primary, Anthropic direct API as fallback
 
 tiers:
   fast:
     models:
-      - id: ollama-8b
-        provider: ollama
-        model: llama3.1:8b
-        endpoint: http://ollama:11434
+      - id: haiku-bedrock
+        provider: bedrock
+        model: us.anthropic.claude-haiku-4-5-20251001-v1:0
+        region: us-east-1
         max_tokens: 2048
         timeout_ms: 15000
-      - id: haiku-cloud
+      - id: haiku-direct                    # fallback if Bedrock throttles
         provider: anthropic
         model: claude-haiku-4-5-20251001
         api_key: ${ANTHROPIC_API_KEY}
@@ -307,13 +325,13 @@ tiers:
     
   mid:
     models:
-      - id: vllm-70b
-        provider: vllm
-        model: meta-llama/Llama-3.1-70B-Instruct
-        endpoint: http://vllm:8000
+      - id: sonnet-bedrock
+        provider: bedrock
+        model: us.anthropic.claude-sonnet-4-20250514-v1:0
+        region: us-east-1
         max_tokens: 4096
         timeout_ms: 60000
-      - id: sonnet-cloud
+      - id: sonnet-direct                   # fallback if Bedrock throttles
         provider: anthropic
         model: claude-sonnet-4-20250514
         api_key: ${ANTHROPIC_API_KEY}
@@ -322,7 +340,13 @@ tiers:
 
   strong:
     models:
-      - id: opus-cloud
+      - id: opus-bedrock
+        provider: bedrock
+        model: us.anthropic.claude-opus-4-20250514-v1:0
+        region: us-east-1
+        max_tokens: 8192
+        timeout_ms: 120000
+      - id: opus-direct                     # fallback
         provider: anthropic
         model: claude-opus-4-20250514
         api_key: ${ANTHROPIC_API_KEY}
@@ -383,21 +407,29 @@ escalation:
 
 embedding:
   model:
-    provider: ollama
-    model: nomic-embed-text
-    endpoint: http://ollama:11434
+    provider: bedrock
+    model: amazon.titan-embed-text-v2:0
+    region: us-east-1
 
 rate_limits:
   per_tenant:
     requests_per_minute: 60
     tokens_per_minute: 100000
   per_model:
-    ollama-8b: {rpm: 100}
-    vllm-70b: {rpm: 50}
+    haiku-bedrock: {rpm: 100}
+    sonnet-bedrock: {rpm: 50}
+    opus-bedrock: {rpm: 20}
+
+budget:
+  tracking_enabled: true
+  default_daily_limit_usd: 50.00
+  default_monthly_limit_usd: 1000.00
+  warning_threshold_pct: 80
+  queue_persistence: true
+  queue_poll_interval_sec: 60
 
 cost:
   max_per_request_usd: 1.00
-  max_per_tenant_per_day_usd: 50.00
 
 policy:
   allow_cloud_fallback: true     # false for air-gapped deployments
@@ -414,3 +446,235 @@ policy:
 - Ports: 4000 (agent-facing), 4001 (admin API, internal only)
 - No GPU required (gateway is a router, not inference)
 - Lightweight: Python + FastAPI or Go for performance
+
+### R16: Credit & Quota Management (Per-Tenant Budget Tracking)
+
+The gateway tracks LLM spend per tenant (customer) and manages graceful degradation when budgets or provider credits are exhausted.
+
+#### Why per-tenant (not per-user):
+
+- Billing is at the customer/organization level, not individual users
+- One tenant's exhaustion MUST NOT affect other tenants
+- Tenant admin sets their own budget ceiling
+- Users within a tenant share the tenant's pool
+
+#### Budget tracking:
+
+```python
+# Per-tenant budget state (persisted in StateClient)
+class TenantBudget:
+    tenant_id: str
+    daily_limit_usd: float          # configured by tenant admin
+    monthly_limit_usd: float        # hard ceiling
+    daily_spent_usd: float          # resets at midnight UTC
+    monthly_spent_usd: float        # resets on 1st of month
+    current_degradation_level: int  # 0=full, 1-4=degraded
+    queue_depth: int                # requests waiting for budget
+    last_reset_at: datetime
+```
+
+Every LLM response includes cost metadata from the provider. Gateway accumulates per tenant:
+```python
+def track_cost(tenant_id: str, response: ProviderResponse):
+    cost = calculate_cost(response.model, response.input_tokens, response.output_tokens)
+    budget = get_tenant_budget(tenant_id)
+    budget.daily_spent_usd += cost
+    budget.monthly_spent_usd += cost
+    
+    if budget.monthly_spent_usd >= budget.monthly_limit_usd:
+        trigger_degradation(tenant_id, level=4)  # all tiers exhausted
+    elif budget.daily_spent_usd >= budget.daily_limit_usd:
+        trigger_degradation(tenant_id, level=2)  # restrict to fast tier
+```
+
+#### Degradation levels:
+
+| Level | Condition | Tiers Available | User Impact |
+|:-----:|-----------|-----------------|-------------|
+| 0 | Budget healthy | fast, mid, strong | Full service |
+| 1 | Daily budget >80% OR strong-tier provider throttling | fast, mid | Complex reasoning downgrades to mid |
+| 2 | Daily budget exceeded OR mid-tier provider throttling | fast only | Evaluations use rules + fast-tier LLM |
+| 3 | All cloud providers throttling/erroring | none (queue) | All LLM requests queued indefinitely |
+| 4 | Monthly budget exceeded | none (queue) | All LLM requests queued until month resets |
+
+#### Provider credit exhaustion detection:
+
+```python
+def detect_credit_exhaustion(provider: str, error: ProviderError) -> bool:
+    """Detect when provider credits/quota are gone (not transient)."""
+    # Bedrock: ThrottlingException with "quota exceeded" or ServiceQuotaExceededException
+    if provider == "bedrock" and error.code in ("ThrottlingException", "ServiceQuotaExceededException"):
+        return True
+    # Anthropic: 429 with "credit balance" or 402 Payment Required
+    if provider == "anthropic" and (error.status == 402 or "credit" in error.message.lower()):
+        return True
+    # OpenAI: 429 with "quota" in message
+    if provider == "openai" and error.status == 429 and "quota" in error.message.lower():
+        return True
+    return False
+```
+
+#### Queue behavior (when budget/credits exhausted):
+
+- Requests that cannot be served are **queued indefinitely** (no TTL, no expiry)
+- Queue is persisted (survives gateway restart) via StateClient
+- When budget resets or credits replenish, queued requests process in priority order:
+  1. Tenant priority (paid tier > free tier)
+  2. Task criticality: `strong` tasks first (they waited longest for good reason)
+  3. FIFO within same priority
+- Gateway polls provider health every 60s — when a previously-exhausted provider responds OK, drain queue
+- Queue depth exposed via admin API and health endpoint
+- Agents receive `LLMCreditExhaustedError` with `can_queue=True` and `queued_position`
+- Agent decides: accept queue (async eval) or fall back to deterministic-only (sync response)
+
+#### Admin API additions:
+
+```
+GET  /admin/budget/{tenant_id}
+  → {daily_limit, daily_spent, monthly_limit, monthly_spent, degradation_level, queue_depth}
+
+POST /admin/budget/{tenant_id}
+  body: {daily_limit_usd, monthly_limit_usd}
+  → update tenant budget limits
+
+GET  /admin/budget/{tenant_id}/history?days=30
+  → daily spend history for trend analysis
+
+GET  /admin/credit-status
+  → per-provider credit health {provider: status, last_error, last_success}
+
+POST /admin/queue/{tenant_id}/drain
+  → manually trigger queue drain (for testing or after manual credit top-up)
+
+GET  /admin/queue/{tenant_id}
+  → {depth, oldest_request, priority_breakdown}
+```
+
+#### Agent-facing response on credit exhaustion:
+
+```json
+{
+  "error": "credit_exhausted",
+  "degradation_level": 3,
+  "tier_availability": {"fast": "exhausted", "mid": "exhausted", "strong": "exhausted"},
+  "queued": true,
+  "queue_position": 7,
+  "estimated_recovery": "2026-06-02T00:00:00Z",
+  "message": "Tenant monthly budget exceeded. Request queued — will process when budget resets."
+}
+```
+
+#### Notifications:
+
+| Event | Trigger | Who to notify |
+|-------|---------|---------------|
+| Budget warning | Daily spend >80% of limit | Tenant admin (webhook) |
+| Budget exceeded | Daily or monthly limit hit | Tenant admin + observer |
+| Provider exhausted | Credit/quota error from provider | System admin (ops) |
+| Queue growing | >50 queued requests for a tenant | Tenant admin |
+| Queue draining | Credits restored, processing backlog | Tenant admin |
+
+#### Configuration additions:
+
+```yaml
+# config/routing.yaml additions
+budget:
+  tracking_enabled: true
+  default_daily_limit_usd: 50.00
+  default_monthly_limit_usd: 1000.00
+  warning_threshold_pct: 80        # notify at 80% of daily limit
+  queue_persistence: true           # persist queue across restarts
+  queue_poll_interval_sec: 60       # check provider health for queue drain
+  cost_per_model:                   # cost per 1K tokens (input/output)
+    claude-haiku-4-5:    {input: 0.001, output: 0.005}
+    claude-sonnet-4:     {input: 0.003, output: 0.015}
+    claude-opus-4:       {input: 0.015, output: 0.075}
+    titan-embed-v2:      {input: 0.0001, output: 0}
+
+### R17: AWS-First Provider Configuration
+
+The gateway ships with Bedrock as the primary provider. Adapter pattern ensures other providers plug in without gateway changes.
+
+#### Default tier mapping (AWS/Bedrock):
+
+```yaml
+tiers:
+  fast:
+    models:
+      - id: haiku-bedrock
+        provider: bedrock
+        model: us.anthropic.claude-haiku-4-5-20251001-v1:0
+        region: us-east-1
+        max_tokens: 2048
+        timeout_ms: 15000
+
+  mid:
+    models:
+      - id: sonnet-bedrock
+        provider: bedrock
+        model: us.anthropic.claude-sonnet-4-20250514-v1:0
+        region: us-east-1
+        max_tokens: 4096
+        timeout_ms: 60000
+
+  strong:
+    models:
+      - id: opus-bedrock
+        provider: bedrock
+        model: us.anthropic.claude-opus-4-20250514-v1:0
+        region: us-east-1
+        max_tokens: 8192
+        timeout_ms: 120000
+
+embedding:
+  model:
+    provider: bedrock
+    model: amazon.titan-embed-text-v2:0
+    region: us-east-1
+```
+
+#### Provider adapter interface:
+
+```python
+class ProviderAdapter(ABC):
+    """Base class for all LLM provider adapters."""
+    
+    @abstractmethod
+    async def complete(self, request: CompletionRequest) -> CompletionResponse: ...
+    
+    @abstractmethod
+    async def embed(self, texts: list[str]) -> list[list[float]]: ...
+    
+    @abstractmethod
+    async def health_check(self) -> bool: ...
+    
+    @abstractmethod
+    def estimate_cost(self, input_tokens: int, output_tokens: int) -> float: ...
+```
+
+#### Shipped adapters (V1):
+
+| Adapter | Provider | Auth | Notes |
+|---------|----------|------|-------|
+| `BedrockAdapter` | AWS Bedrock | IAM role (boto3 default chain) | Primary. Converse API. |
+| `AnthropicAdapter` | Anthropic API | API key | Fallback if Bedrock throttles |
+| `OpenAICompatibleAdapter` | Any OpenAI-compatible endpoint | API key | For vLLM, Ollama, OpenRouter |
+
+#### Future adapters (not V1):
+
+| Adapter | When |
+|---------|------|
+| `AzureOpenAIAdapter` | When Azure customers need it |
+| `VertexAIAdapter` | When GCP customers need it |
+| `OllamaAdapter` | When on-prem profile ships |
+
+Adding a new provider: implement `ProviderAdapter`, register in adapter factory, add model config to `routing.yaml`. Zero gateway core changes.
+
+#### Bedrock-specific behaviors:
+
+- Auth: uses boto3 default credential chain (IAM role on ECS/EC2, env vars locally)
+- Cross-region inference: supported via `region` field per model (for capacity)
+- Converse API: normalizes tool calling across Claude/Titan/Llama on Bedrock
+- Throttling: Bedrock returns `ThrottlingException` — gateway marks model as throttled, tries fallback
+- Provisioned throughput: if configured, gateway uses provisioned model ARN instead of on-demand
+```

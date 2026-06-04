@@ -4,6 +4,39 @@
 
 Define how all services are packaged, deployed, versioned, and upgraded as a single system using Docker Compose. No Kubernetes. Simple enough for a single `docker compose up -d`.
 
+## Platform Strategy: AWS-First with Adapter Decoupling
+
+The system is **built first for AWS** (Bedrock, S3, RDS, ElastiCache) but decoupled via adapters so it can run on-prem or on other clouds without code changes.
+
+| Layer | AWS (V1 default) | On-Prem (future) | What Decouples |
+|-------|------------------|-------------------|----------------|
+| LLM inference | Bedrock (Converse API) | Ollama / vLLM | Gateway provider adapters |
+| Object storage | S3 | MinIO | StorageClient adapter |
+| Database | RDS PostgreSQL + pgvector | Local PostgreSQL | Connection string (same engine) |
+| Cache | ElastiCache Redis | Local Redis | Connection string (same engine) |
+| Embeddings | Titan Embed v2 via Bedrock | nomic-embed-text via Ollama | Gateway embed endpoint |
+| OCR | Textract | Tesseract | Preprocessor extraction backend |
+| Compute | ECS Fargate / EC2 | Docker Compose | Container orchestration |
+| Auth | Cognito / custom JWT | Any JWT issuer | MCP module validates tokens |
+
+**Switching from AWS to on-prem** requires:
+1. Change `config/routing.yaml` (point tiers at local models)
+2. Change `.env` (set `STORAGE_BACKEND=minio`, local DB connection strings)
+3. Bring up local infrastructure containers (postgres, redis, minio, ollama)
+
+Zero code changes. Zero image rebuilds.
+
+## System Requirements Covered
+
+| System Requirement | This document's role | Section |
+|---|---|---|
+| AWS-First w/ Adapters | Profiles switch between AWS cloud and local infrastructure | §Platform Strategy, §Deployment Profiles |
+| Per-Tenant Budget | Budget limits configured in routing.yaml, PII_HMAC_KEY in secrets | §Secrets Management |
+| Observability | Health checks for all services, log retention config | §Health Checks, §Log Retention |
+| Independent Deploy | Per-service version tags, `--no-deps` upgrade, rollback | §Version Management, §Upgrade Commands |
+| Hot-Reload Config | routing.yaml mounted as volume, editable without restart | §Directory Structure |
+| PII-Aware Logging | PII_HMAC_KEY in secrets config | §Secrets Management |
+
 ## Principles
 
 1. Each service is ONE container, ONE image, ONE version
@@ -11,8 +44,9 @@ Define how all services are packaged, deployed, versioned, and upgraded as a sin
 3. Swap LLMs by editing a YAML file, not code
 4. Works air-gapped (no internet) with local LLMs
 5. Works hybrid (local + cloud) with LLM gateway routing
-6. Works cloud-only (all inference via API)
+6. Works cloud-only (all inference via API) — **this is the default**
 7. Customer deploys with a single command
+8. Per-tenant budget tracking — one customer's exhaustion never affects another
 
 ## Service Map
 
@@ -72,17 +106,21 @@ EVAL_VERSION=1.4.9 docker compose up -d --no-deps agent-eval
 ## Deployment Profiles
 
 ```yaml
-# Base: always runs (no LLM, cloud-only mode)
+# Base: AWS cloud mode (Bedrock for LLM, S3 for storage, RDS for DB)
+# This is the default — services connect to AWS infrastructure via IAM
 docker compose up -d
 
-# With local LLM (Ollama — simple, single GPU)
-docker compose --profile local-llm up -d
+# Local development (adds local postgres, redis, minio)
+docker compose --profile local-infra up -d
+
+# With local LLM (Ollama — for dev/testing without Bedrock costs)
+docker compose --profile local-infra --profile local-llm up -d
 
 # With production local LLM (vLLM — multi-GPU, high throughput)
-docker compose --profile local-llm-prod up -d
+docker compose --profile local-infra --profile local-llm-prod up -d
 
-# Air-gapped (no cloud, all local)
-docker compose --profile local-llm --profile air-gapped up -d
+# Air-gapped (no cloud, all local — full on-prem deployment)
+docker compose --profile local-infra --profile local-llm --profile air-gapped up -d
 ```
 
 ## Directory Structure (customer deployment)
@@ -195,14 +233,26 @@ networks:
 ## Secrets Management
 
 ```bash
-# .env file for simple deployments
+# .env file — AWS-first defaults
+DB_HOST=compliance-db.cluster-xyz.us-east-1.rds.amazonaws.com
 DB_PASSWORD=changeme
-STORAGE_ACCESS_KEY=minioadmin
-STORAGE_SECRET_KEY=minioadmin
-ANTHROPIC_API_KEY=sk-ant-...     # only if using cloud models
+AWS_REGION=us-east-1
+STORAGE_BACKEND=s3
+STORAGE_BUCKET=compliance-artifacts
+# Bedrock auth: uses IAM role (no API keys needed on ECS/EC2)
+# Anthropic direct API (fallback): only if using direct API as Bedrock fallback
+ANTHROPIC_API_KEY=sk-ant-...
 
-# For production: Docker secrets or external vault
-# docker secret create db_password db_password.txt
+# For local development:
+# STORAGE_BACKEND=minio
+# STORAGE_ENDPOINT=http://minio:9000
+# STORAGE_ACCESS_KEY=minioadmin
+# STORAGE_SECRET_KEY=minioadmin
+# DB_HOST=postgres
+# STATE_DSN=postgresql://compliance:pass@postgres:5432/compliance
+
+# For production: AWS Secrets Manager or Parameter Store
+# Services read secrets via IAM role — no keys in .env
 ```
 
 ## Monitoring (optional add-on)

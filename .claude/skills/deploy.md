@@ -1,79 +1,111 @@
-# Skill: Deploy
+---
+name: deploy
+description: Deploy services using Docker Compose for this compliance AI system. Use this skill when the user says "deploy", "start services", "docker compose up", "bring up", "launch", "ship it", or needs to update a running service. Also use for rollbacks, troubleshooting stuck containers, or post-deploy validation including Playwright smoke tests.
+---
 
-## Purpose
-Deploy services using Docker Compose. Handle single-service updates, full stack deployment, and rollbacks.
+# Deploy
 
-## Tech Stack
-- Docker Compose (primary orchestration)
-- Docker images (pre-built)
-- Volumes for persistence (pgdata, redis, minio, ollama)
-- Environment-based configuration (.env file)
+Deploy services using Docker Compose. Handles single-service updates, full stack deployment, rollbacks, and post-deploy validation with Playwright smoke testing.
 
-## When to use
-- User says "deploy", "start services", "docker compose up", "bring up"
-- After successful build
-- When updating a single service version
+## Pre-Deploy Checklist
 
-## Instructions
+Run all of these — skipping one causes mysterious failures:
 
-### Pre-deploy checklist
-1. Verify .env file exists with required variables
-2. Verify docker-compose.yml is valid: `docker compose config --quiet`
-3. Verify required images exist: `docker compose images`
-4. Check if any services are already running: `docker compose ps`
-5. Verify no port conflicts: `lsof -i :8080 -i :4000 -i :5000 -i :9000 -i :5432 -i :6379`
-
-### Deploy full stack
 ```bash
+# 1. Validate compose config
+docker compose config --quiet
+
+# 2. Check .env exists
+test -f .env && echo "OK" || echo "MISSING .env"
+
+# 3. Check images exist
+docker compose images
+
+# 4. Check what's running
+docker compose ps
+
+# 5. Check port conflicts
+lsof -i :8080 -i :4000 -i :5000 -i :9000 -i :5432 -i :6379 2>/dev/null
+```
+
+## Deploy Commands
+
+```bash
+# Full stack
 docker compose up -d
-```
 
-### Deploy single service (no-downtime update)
-```bash
-# Pull/build new image first
+# Single service (no-downtime update)
 docker compose up -d --no-deps {service-name}
-```
 
-### Deploy with local LLM
-```bash
+# With local LLM
 docker compose --profile local-llm up -d
 ```
 
-### Post-deploy verification
-1. Wait for health checks: `docker compose ps` (all should show "healthy")
-2. Check logs for startup errors: `docker compose logs --tail 20 {service}`
-3. Run diagnostics if available: `docker compose exec compliance-assistant python -m diagnostics`
-4. Verify connectivity between services:
-   - `docker compose exec compliance-assistant curl -sf http://llm-gateway:4000/health`
-   - `docker compose exec compliance-assistant curl -sf http://memory-service:5000/health`
-   - `docker compose exec agent-eval curl -sf http://sandbox-service:9000/health`
+## Post-Deploy Validation
 
-### Rollback single service
+After every deploy, verify the service actually works — a container running is not the same as a service healthy:
+
 ```bash
-# Set previous version in .env or override
-EVAL_VERSION=1.4.9 docker compose up -d --no-deps agent-eval
+# 1. Wait for health
+docker compose ps {service}  # should show "healthy"
+
+# 2. Check endpoints
+curl -sf http://localhost:{port}/health | jq .
+curl -sf http://localhost:{port}/ready | jq .
+
+# 3. Check logs for errors
+docker compose logs --tail 30 {service} | grep -i "error\|exception\|traceback"
+
+# 4. Verify inter-service connectivity
+docker compose exec {service} curl -sf http://llm-gateway:4000/health
+docker compose exec {service} curl -sf http://memory-service:5000/health
 ```
 
-### Rollback entire stack
+## Playwright Smoke Tests
+
+For services with web dashboards or complex API flows, use Playwright MCP to validate end-to-end after deploy:
+
+**Browser-based validation:**
+- Navigate to service dashboard, verify it renders
+- Submit a test request through the UI, verify response
+- Check WebSocket connections establish
+- Take a screenshot as evidence of working state
+
+**API smoke test pattern:**
 ```bash
-# Stop current
+# Quick smoke: submit a minimal request and verify 200
+curl -sf -X POST http://localhost:8080/evaluate \
+  -H "Content-Type: application/json" \
+  -d '{"control_id":"CC6.1","framework":"SOC2","evidence":[]}' \
+  | jq '.score'
+```
+
+## Rollback
+
+```bash
+# Single service — use previous version tag
+EVAL_VERSION=1.4.9 docker compose up -d --no-deps agent-eval
+
+# Full stack — revert to known-good
 docker compose down
-
-# Checkout previous known-good state
 git checkout {previous-tag} -- docker-compose.yml .env
-
-# Redeploy
 docker compose up -d
 ```
 
-### Troubleshooting
-- Container restart loop → `docker compose logs {service}` (check startup errors)
-- Port conflict → `docker compose down` then re-up, or change ports in docker-compose.override.yml
-- Volume permission issue → `docker compose down -v {service}` (WARNING: deletes data)
-- Out of disk → `docker system prune -f` (removes unused images/containers)
+## Troubleshooting
 
-### NEVER do without asking
-- `docker compose down -v` (deletes all volumes/data)
-- `docker system prune -a` (removes all images)
-- Modify .env secrets without confirmation
-- Deploy to any environment that isn't local development
+| Symptom | Diagnosis | Fix |
+|---------|-----------|-----|
+| Restart loop | `docker compose logs {service}` | Fix startup error in code/config |
+| Port conflict | `lsof -i :{port}` | Stop conflicting process or change port |
+| Volume permissions | Check Dockerfile USER vs mount ownership | Fix UID in Dockerfile |
+| Out of disk | `docker system df` | `docker system prune -f` (removes unused) |
+| Unhealthy after 60s | Health check failing | Check health endpoint manually |
+
+## Destructive Operations — Confirm Before Running
+
+These lose data and cannot be undone:
+- `docker compose down -v` — deletes all volumes including database data
+- `docker system prune -a` — removes all images
+- Modifying .env secrets
+- Deploying to anything that isn't local development

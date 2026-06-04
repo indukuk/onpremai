@@ -1,0 +1,51 @@
+date,reviewer,user_reviewed,access_level,decision,notes
+2025-01-15,sarah.chen@acme-corp.com,john.martinez@acme-corp.com,standard,approve,Annual review - access appropriate for role
+2025-01-15,sarah.chen@acme-corp.com,emily.watson@acme-corp.com,admin,approve,DevOps lead requires admin for deployments
+2025-01-15,sarah.chen@acme-corp.com,raj.patel@acme-corp.com,standard,approve,Engineering role confirmed
+2025-01-16,mike.johnson@acme-corp.com,lisa.nguyen@acme-corp.com,elevated,approve,Security team lead needs elevated for SIEM
+2025-01-16,mike.johnson@acme-corp.com,tom.bradley@acme-corp.com,standard,revoke,Transferred to marketing - no longer needs engineering access
+2025-01-17,sarah.chen@acme-corp.com,karen.smith@acme-corp.com,admin,approve,DBA requires admin access to production databases
+2025-01-17,sarah.chen@acme-corp.com,david.lee@acme-corp.com,standard,approve,Backend developer - access matches role
+2025-01-18,mike.johnson@acme-corp.com,anna.kowalski@acme-corp.com,elevated,approve,Team lead for infrastructure
+2025-01-18,mike.johnson@acme-corp.com,chris.taylor@acme-corp.com,standard,approve,Frontend developer - standard access sufficient
+2025-01-19,sarah.chen@acme-corp.com,jessica.brown@acme-corp.com,standard,revoke,On extended leave - access suspended per policy
+2025-02-10,mike.johnson@acme-corp.com,mark.wilson@acme-corp.com,admin,approve,CTO - admin access required
+2025-02-10,mike.johnson@acme-corp.com,susan.davis@acme-corp.com,standard,approve,QA engineer - access level appropriate
+2025-02-11,sarah.chen@acme-corp.com,peter.garcia@acme-corp.com,elevated,approve,Senior architect needs elevated for design reviews
+2025-02-11,sarah.chen@acme-corp.com,nancy.miller@acme-corp.com,standard,approve,Product manager - read access confirmed
+2025-02-12,mike.johnson@acme-corp.com,james.anderson@acme-corp.com,standard,approve,Junior developer - standard access only
+2025-03-05,sarah.chen@acme-corp.com,robert.thomas@acme-corp.com,standard,revoke,Contractor engagement ended
+2025-03-05,sarah.chen@acme-corp.com,michelle.jackson@acme-corp.com,elevated,approve,Security analyst promotion - elevated access granted
+2025-03-06,mike.johnson@acme-corp.com,daniel.white@acme-corp.com,standard,approve,New hire onboarding complete
+2025-03-06,mike.johnson@acme-corp.com,stephanie.harris@acme-corp.com,standard,approve,Annual review - no changes needed
+2025-03-07,sarah.chen@acme-corp.com,kevin.martin@acme-corp.com,admin,approve,Infrastructure lead requires admin
+2025-04-14,mike.johnson@acme-corp.com,laura.thompson@acme-corp.com,standard,approve,Quarterly review - access appropriate
+2025-04-14,mike.johnson@acme-corp.com,brian.robinson@acme-corp.com,standard,approve,Developer access confirmed
+2025-04-15,sarah.chen@acme-corp.com,amanda.clark@acme-corp.com,elevated,revoke,Role change to non-technical position
+2025-04-15,sarah.chen@acme-corp.com,jason.lewis@acme-corp.com,standard,approve,Support engineer - standard access
+2025-04-16,mike.johnson@acme-corp.com,nicole.walker@acme-corp.com,standard,approve,Data analyst - read access sufficient
+2025-05-20,sarah.chen@acme-corp.com,ryan.hall@acme-corp.com,standard,approve,Midyear review - no issues
+2025-05-20,sarah.chen@acme-corp.com,heather.allen@acme-corp.com,elevated,approve,Promoted to team lead
+2025-05-21,mike.johnson@acme-corp.com,tyler.young@acme-corp.com,standard,approve,New hire - standard access provisioned
+2025-05-21,mike.johnson@acme-corp.com,rachel.king@acme-corp.com,standard,approve,Annual review complete
+2025-05-22,sarah.chen@acme-corp.com,brandon.wright@acme-corp.com,standard,revoke,Performance improvement plan - access reduced
+2025-06-10,mike.johnson@acme-corp.com,megan.lopez@acme-corp.com,standard,approve,Quarterly access review
+2025-06-10,mike.johnson@acme-corp.com,alex.hill@acme-corp.com,admin,approve,Promoted to platform engineering lead
+2025-06-11,sarah.chen@acme-corp.com,samantha.scott@acme-corp.com,standard,approve,No changes required
+2025-06-11,sarah.chen@acme-corp.com,joshua.green@acme-corp.com,standard,approve,Developer access confirmed
+2025-06-12,mike.johnson@acme-corp.com,ashley.adams@acme-corp.com,elevated,approve,Security team expansion
+2025-07-08,sarah.chen@acme-corp.com,andrew.nelson@acme-corp.com,standard,approve,Routine quarterly review
+2025-07-08,sarah.chen@acme-corp.com,christina.carter@acme-corp.com,standard,approve,Support team - access appropriate
+2025-07-09,mike.johnson@acme-corp.com,matthew.mitchell@acme-corp.com,standard,approve,Backend developer
+2025-07-09,mike.johnson@acme-corp.com,jennifer.perez@acme-corp.com,elevated,approve,DevOps promotion
+2025-07-10,sarah.chen@acme-corp.com,timothy.roberts@acme-corp.com,standard,approve,No change needed
+2025-08-18,mike.johnson@acme-corp.com,victoria.turner@acme-corp.com,standard,approve,Annual review
+2025-08-18,mike.johnson@acme-corp.com,patrick.phillips@acme-corp.com,standard,approve,Contractor renewal - access maintained
+2025-08-19,sarah.chen@acme-corp.com,rebecca.campbell@acme-corp.com,standard,revoke,Terminated - immediate access removal
+2025-08-19,sarah.chen@acme-corp.com,eric.parker@acme-corp.com,standard,approve,Engineering team member
+2025-08-20,mike.johnson@acme-corp.com,diana.evans@acme-corp.com,admin,approve,New DBA hire - admin required for role
+2025-09-15,sarah.chen@acme-corp.com,gregory.edwards@acme-corp.com,standard,approve,Quarterly review complete
+2025-09-15,sarah.chen@acme-corp.com,maria.collins@acme-corp.com,standard,approve,Product team - read access
+2025-09-16,mike.johnson@acme-corp.com,charles.stewart@acme-corp.com,elevated,approve,Architect role requires elevated
+2025-09-16,mike.johnson@acme-corp.com,sandra.sanchez@acme-corp.com,standard,approve,Standard developer access
+2025-10-22,sarah.chen@acme-corp.com,frank.morris@acme-corp.com,standard,approve,Routine review - no issues found

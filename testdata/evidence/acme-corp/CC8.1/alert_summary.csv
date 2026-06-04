@@ -1,0 +1,41 @@
+alert_id,timestamp,severity,source,description,resolved,resolution_time_min
+ALT-001,2025-01-03T02:14:00Z,critical,cloudwatch,CPU utilization exceeded 95% on prod-app-01,true,12
+ALT-002,2025-01-05T08:30:00Z,warning,datadog,Memory usage above 80% on redis-primary,true,45
+ALT-003,2025-01-12T14:22:00Z,info,prometheus,Disk space below 30% on log-aggregator,true,180
+ALT-004,2025-01-18T03:45:00Z,critical,pagerduty,Database connection pool exhausted,true,8
+ALT-005,2025-01-25T11:10:00Z,warning,cloudwatch,API latency p99 above 2000ms,true,35
+ALT-006,2025-02-02T06:55:00Z,critical,pagerduty,Authentication service unreachable,true,5
+ALT-007,2025-02-08T16:30:00Z,warning,prometheus,Certificate expiry within 14 days,true,1440
+ALT-008,2025-02-14T09:20:00Z,info,datadog,Deployment canary showing 2% error rate increase,true,60
+ALT-009,2025-02-22T22:45:00Z,critical,cloudwatch,S3 bucket access denied spike,true,15
+ALT-010,2025-03-01T04:10:00Z,warning,pagerduty,Kubernetes pod restart loop detected,true,25
+ALT-011,2025-03-08T13:55:00Z,info,prometheus,Log ingestion rate doubled unexpectedly,true,90
+ALT-012,2025-03-15T07:30:00Z,critical,cloudwatch,RDS failover initiated automatically,true,3
+ALT-013,2025-03-22T18:40:00Z,warning,datadog,CDN cache hit ratio dropped below 70%,true,120
+ALT-014,2025-03-28T01:15:00Z,critical,pagerduty,Payment processing service timeout,true,7
+ALT-015,2025-04-05T10:20:00Z,warning,cloudwatch,Lambda function duration exceeding timeout threshold,true,55
+ALT-016,2025-04-12T15:45:00Z,info,prometheus,Unusual geographic distribution of API requests,true,240
+ALT-017,2025-04-18T23:30:00Z,critical,pagerduty,DDoS attack detected - WAF rules triggered,true,4
+ALT-018,2025-04-25T08:10:00Z,warning,datadog,Queue depth exceeding normal levels,true,40
+ALT-019,2025-05-02T12:55:00Z,info,cloudwatch,Auto-scaling group launched 3 new instances,true,0
+ALT-020,2025-05-08T19:20:00Z,critical,pagerduty,Data pipeline stalled - no records processed in 30min,true,22
+ALT-021,2025-05-15T05:40:00Z,warning,prometheus,DNS resolution latency spike,true,15
+ALT-022,2025-05-22T14:15:00Z,critical,cloudwatch,EBS volume IOPS throttled on database server,true,30
+ALT-023,2025-05-30T09:50:00Z,warning,datadog,Third-party API dependency returning 503s,true,180
+ALT-024,2025-06-05T21:30:00Z,info,prometheus,Scheduled maintenance window starting,true,0
+ALT-025,2025-06-12T03:25:00Z,critical,pagerduty,Cross-region replication lag exceeding 5 minutes,true,18
+ALT-026,2025-06-18T16:40:00Z,warning,cloudwatch,SQS dead letter queue growing,true,75
+ALT-027,2025-06-25T11:15:00Z,critical,pagerduty,SSL certificate mismatch on production load balancer,true,6
+ALT-028,2025-07-02T07:50:00Z,warning,datadog,Container memory limit approaching on auth-service,true,30
+ALT-029,2025-07-08T20:05:00Z,info,prometheus,Backup job completed with warnings,true,0
+ALT-030,2025-07-15T02:30:00Z,critical,cloudwatch,Network ACL misconfiguration blocking traffic,true,11
+ALT-031,2025-07-22T13:45:00Z,warning,pagerduty,Elasticsearch cluster yellow status,true,360
+ALT-032,2025-07-30T06:20:00Z,critical,pagerduty,Production database approaching storage limit,true,45
+ALT-033,2025-08-05T17:55:00Z,warning,cloudwatch,API error rate above 1% threshold,true,20
+ALT-034,2025-08-12T10:30:00Z,info,datadog,New deployment detected - monitoring baseline shift,true,0
+ALT-035,2025-08-20T23:15:00Z,critical,pagerduty,Unauthorized access attempt from suspicious IP range,true,2
+ALT-036,2025-08-28T04:40:00Z,warning,prometheus,Service mesh sidecar CPU overhead increasing,true,60
+ALT-037,2025-09-03T14:25:00Z,critical,cloudwatch,Multi-AZ database failover event,true,4
+ALT-038,2025-09-10T08:50:00Z,warning,datadog,GraphQL query complexity exceeding limits,true,30
+ALT-039,2025-09-18T19:10:00Z,info,prometheus,Feature flag change detected in production,true,0
+ALT-040,2025-09-25T01:35:00Z,critical,pagerduty,Customer data export job failed - retry exhausted,false,

@@ -1,0 +1,384 @@
+{
+  "framework": "SOC2",
+  "version": "2017",
+  "criteria": [
+    {
+      "control_id": "CC1.1",
+      "criteria": [
+        {
+          "id": "CC1.1-TC1",
+          "description": "Code of conduct or ethics policy document exists",
+          "check_type": "file_existence",
+          "params": {"pattern": "*code*of*conduct*|*ethics*policy*"}
+        },
+        {
+          "id": "CC1.1-TC2",
+          "description": "Code of conduct reviewed within 12 months",
+          "check_type": "freshness",
+          "params": {"max_days": 365}
+        },
+        {
+          "id": "CC1.1-TC3",
+          "description": "Employee acknowledgment rate meets threshold",
+          "check_type": "quantitative",
+          "params": {"field": "acknowledgment_rate_pct", "threshold": 95, "operator": "gte"}
+        },
+        {
+          "id": "CC1.1-TC4",
+          "description": "Whistleblower or ethics reporting mechanism documented",
+          "check_type": "keyword_presence",
+          "params": {"keywords": ["whistleblower", "ethics hotline", "reporting mechanism", "anonymous reporting"]}
+        }
+      ]
+    },
+    {
+      "control_id": "CC1.4",
+      "criteria": [
+        {
+          "id": "CC1.4-TC1",
+          "description": "Security awareness training program exists",
+          "check_type": "file_existence",
+          "params": {"pattern": "*security*awareness*training*"}
+        },
+        {
+          "id": "CC1.4-TC2",
+          "description": "Training completion rate meets 95% threshold",
+          "check_type": "quantitative",
+          "params": {"field": "training_completion_pct", "threshold": 95, "operator": "gte"}
+        },
+        {
+          "id": "CC1.4-TC3",
+          "description": "Training conducted within last 12 months",
+          "check_type": "freshness",
+          "params": {"max_days": 365}
+        },
+        {
+          "id": "CC1.4-TC4",
+          "description": "Training records contain required fields",
+          "check_type": "schema_presence",
+          "params": {"required_fields": ["employee_name", "course_name", "completion_date", "score"]}
+        }
+      ]
+    },
+    {
+      "control_id": "CC3.2",
+      "criteria": [
+        {
+          "id": "CC3.2-TC1",
+          "description": "Risk assessment document exists",
+          "check_type": "file_existence",
+          "params": {"pattern": "*risk*assessment*"}
+        },
+        {
+          "id": "CC3.2-TC2",
+          "description": "Risk assessment performed within 12 months",
+          "check_type": "freshness",
+          "params": {"max_days": 365}
+        },
+        {
+          "id": "CC3.2-TC3",
+          "description": "Risk register contains minimum number of identified risks",
+          "check_type": "row_count",
+          "params": {"min_rows": 15}
+        },
+        {
+          "id": "CC3.2-TC4",
+          "description": "Risk register has required schema fields",
+          "check_type": "schema_presence",
+          "params": {"required_fields": ["risk_id", "description", "likelihood", "impact", "risk_level", "owner", "mitigation"]}
+        },
+        {
+          "id": "CC3.2-TC5",
+          "description": "All high risks have mitigation plans",
+          "check_type": "quantitative",
+          "params": {"field": "high_risk_mitigation_pct", "threshold": 100, "operator": "gte"}
+        }
+      ]
+    },
+    {
+      "control_id": "CC4.1",
+      "criteria": [
+        {
+          "id": "CC4.1-TC1",
+          "description": "Penetration test report exists",
+          "check_type": "file_existence",
+          "params": {"pattern": "*penetration*test*report*|*pentest*report*"}
+        },
+        {
+          "id": "CC4.1-TC2",
+          "description": "Penetration test conducted within 12 months",
+          "check_type": "freshness",
+          "params": {"max_days": 365}
+        },
+        {
+          "id": "CC4.1-TC3",
+          "description": "Vulnerability scan results show acceptable risk level",
+          "check_type": "quantitative",
+          "params": {"field": "critical_vulns_open", "threshold": 0, "operator": "eq"}
+        },
+        {
+          "id": "CC4.1-TC4",
+          "description": "Vulnerability remediation within SLA",
+          "check_type": "quantitative",
+          "params": {"field": "sla_compliance_pct", "threshold": 90, "operator": "gte"}
+        }
+      ]
+    },
+    {
+      "control_id": "CC5.2",
+      "criteria": [
+        {
+          "id": "CC5.2-TC1",
+          "description": "IT general controls documentation exists",
+          "check_type": "file_existence",
+          "params": {"pattern": "*ITGC*|*general*controls*"}
+        },
+        {
+          "id": "CC5.2-TC2",
+          "description": "System configuration baselines documented",
+          "check_type": "file_existence",
+          "params": {"pattern": "*configuration*baseline*|*hardening*standard*"}
+        },
+        {
+          "id": "CC5.2-TC3",
+          "description": "Backup procedures documented and tested",
+          "check_type": "keyword_presence",
+          "params": {"keywords": ["backup schedule", "recovery point", "recovery time", "backup verification"]}
+        },
+        {
+          "id": "CC5.2-TC4",
+          "description": "Backup test conducted within 90 days",
+          "check_type": "freshness",
+          "params": {"max_days": 90}
+        }
+      ]
+    },
+    {
+      "control_id": "CC6.1",
+      "criteria": [
+        {
+          "id": "CC6.1-TC1",
+          "description": "Access control policy exists and is current",
+          "check_type": "file_existence",
+          "params": {"pattern": "*access*control*policy*"}
+        },
+        {
+          "id": "CC6.1-TC2",
+          "description": "Policy reviewed within 12 months",
+          "check_type": "freshness",
+          "params": {"max_days": 365}
+        },
+        {
+          "id": "CC6.1-TC3",
+          "description": "Access log shows review activity",
+          "check_type": "row_count",
+          "params": {"min_rows": 10}
+        },
+        {
+          "id": "CC6.1-TC4",
+          "description": "No terminated employees with active access",
+          "check_type": "cross_reference",
+          "params": {"source": "terminated_employees", "target": "active_access_list", "match_field": "email"}
+        },
+        {
+          "id": "CC6.1-TC5",
+          "description": "MFA enabled for all admin accounts",
+          "check_type": "quantitative",
+          "params": {"field": "mfa_enabled_pct", "threshold": 100, "operator": "gte"}
+        }
+      ]
+    },
+    {
+      "control_id": "CC6.2",
+      "criteria": [
+        {
+          "id": "CC6.2-TC1",
+          "description": "User provisioning procedure documented",
+          "check_type": "file_existence",
+          "params": {"pattern": "*user*provisioning*|*access*request*procedure*"}
+        },
+        {
+          "id": "CC6.2-TC2",
+          "description": "All access requests have documented approval",
+          "check_type": "quantitative",
+          "params": {"field": "approved_requests_pct", "threshold": 100, "operator": "gte"}
+        },
+        {
+          "id": "CC6.2-TC3",
+          "description": "Access request records contain required fields",
+          "check_type": "schema_presence",
+          "params": {"required_fields": ["requestor", "approver", "date_requested", "date_approved", "access_level", "justification"]}
+        },
+        {
+          "id": "CC6.2-TC4",
+          "description": "Minimum sample of provisioning records available",
+          "check_type": "row_count",
+          "params": {"min_rows": 25}
+        }
+      ]
+    },
+    {
+      "control_id": "CC6.3",
+      "criteria": [
+        {
+          "id": "CC6.3-TC1",
+          "description": "Termination deprovisioning procedure documented",
+          "check_type": "file_existence",
+          "params": {"pattern": "*termination*|*deprovisioning*|*offboarding*"}
+        },
+        {
+          "id": "CC6.3-TC2",
+          "description": "Access removed within 24 hours of termination",
+          "check_type": "quantitative",
+          "params": {"field": "avg_deprovisioning_hours", "threshold": 24, "operator": "lte"}
+        },
+        {
+          "id": "CC6.3-TC3",
+          "description": "No terminated employees found in active access list",
+          "check_type": "cross_reference",
+          "params": {"source": "terminated_employees_last_90_days", "target": "active_access_list", "match_field": "employee_id"}
+        },
+        {
+          "id": "CC6.3-TC4",
+          "description": "Deprovisioning audit log has sufficient records",
+          "check_type": "row_count",
+          "params": {"min_rows": 10}
+        }
+      ]
+    },
+    {
+      "control_id": "CC6.6",
+      "criteria": [
+        {
+          "id": "CC6.6-TC1",
+          "description": "Access review schedule and procedure documented",
+          "check_type": "file_existence",
+          "params": {"pattern": "*access*review*"}
+        },
+        {
+          "id": "CC6.6-TC2",
+          "description": "Privileged access review conducted within 90 days",
+          "check_type": "freshness",
+          "params": {"max_days": 90}
+        },
+        {
+          "id": "CC6.6-TC3",
+          "description": "Standard access review conducted within 180 days",
+          "check_type": "freshness",
+          "params": {"max_days": 180}
+        },
+        {
+          "id": "CC6.6-TC4",
+          "description": "Review completion rate meets threshold",
+          "check_type": "quantitative",
+          "params": {"field": "review_completion_pct", "threshold": 100, "operator": "gte"}
+        },
+        {
+          "id": "CC6.6-TC5",
+          "description": "Identified excess access removed within 30 days",
+          "check_type": "quantitative",
+          "params": {"field": "remediation_within_sla_pct", "threshold": 95, "operator": "gte"}
+        }
+      ]
+    },
+    {
+      "control_id": "CC7.1",
+      "criteria": [
+        {
+          "id": "CC7.1-TC1",
+          "description": "SIEM or log monitoring solution deployed",
+          "check_type": "keyword_presence",
+          "params": {"keywords": ["SIEM", "log aggregation", "security monitoring", "alert correlation"]}
+        },
+        {
+          "id": "CC7.1-TC2",
+          "description": "Vulnerability scanning performed within 7 days",
+          "check_type": "freshness",
+          "params": {"max_days": 7}
+        },
+        {
+          "id": "CC7.1-TC3",
+          "description": "Alert triage procedure documented",
+          "check_type": "file_existence",
+          "params": {"pattern": "*alert*triage*|*incident*triage*"}
+        },
+        {
+          "id": "CC7.1-TC4",
+          "description": "Mean time to detect (MTTD) within acceptable range",
+          "check_type": "quantitative",
+          "params": {"field": "mttd_hours", "threshold": 24, "operator": "lte"}
+        }
+      ]
+    },
+    {
+      "control_id": "CC7.2",
+      "criteria": [
+        {
+          "id": "CC7.2-TC1",
+          "description": "Incident response plan exists",
+          "check_type": "file_existence",
+          "params": {"pattern": "*incident*response*plan*"}
+        },
+        {
+          "id": "CC7.2-TC2",
+          "description": "Incident response plan reviewed within 12 months",
+          "check_type": "freshness",
+          "params": {"max_days": 365}
+        },
+        {
+          "id": "CC7.2-TC3",
+          "description": "Tabletop exercise conducted within 12 months",
+          "check_type": "freshness",
+          "params": {"max_days": 365}
+        },
+        {
+          "id": "CC7.2-TC4",
+          "description": "Incident response team roles defined",
+          "check_type": "keyword_presence",
+          "params": {"keywords": ["incident commander", "communications lead", "technical lead", "escalation path"]}
+        },
+        {
+          "id": "CC7.2-TC5",
+          "description": "Incident records demonstrate proper handling",
+          "check_type": "row_count",
+          "params": {"min_rows": 5}
+        }
+      ]
+    },
+    {
+      "control_id": "CC8.1",
+      "criteria": [
+        {
+          "id": "CC8.1-TC1",
+          "description": "Change management policy exists",
+          "check_type": "file_existence",
+          "params": {"pattern": "*change*management*policy*"}
+        },
+        {
+          "id": "CC8.1-TC2",
+          "description": "Change management policy reviewed within 12 months",
+          "check_type": "freshness",
+          "params": {"max_days": 365}
+        },
+        {
+          "id": "CC8.1-TC3",
+          "description": "All changes have documented approval",
+          "check_type": "quantitative",
+          "params": {"field": "approved_changes_pct", "threshold": 100, "operator": "gte"}
+        },
+        {
+          "id": "CC8.1-TC4",
+          "description": "Changes tested in non-production before deployment",
+          "check_type": "quantitative",
+          "params": {"field": "tested_in_nonprod_pct", "threshold": 95, "operator": "gte"}
+        },
+        {
+          "id": "CC8.1-TC5",
+          "description": "Change records contain required fields",
+          "check_type": "schema_presence",
+          "params": {"required_fields": ["change_id", "description", "requestor", "approver", "risk_level", "test_results", "rollback_plan", "implementation_date"]}
+        }
+      ]
+    }
+  ]
+}

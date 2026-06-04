@@ -1,0 +1,21 @@
+risk_id,category,description,likelihood,impact,risk_score,owner,mitigation,status
+RISK-001,Technical,Single point of failure in primary database cluster,3,5,15,kevin.martin@acme-corp.com,Implement multi-AZ RDS with automated failover and read replicas,mitigated
+RISK-002,Security,Credential compromise via phishing attacks on employees,4,4,16,lisa.nguyen@acme-corp.com,Deploy phishing-resistant MFA and security awareness training program,mitigated
+RISK-003,Operational,Key person dependency on infrastructure team lead,3,4,12,mark.wilson@acme-corp.com,Cross-training program and documented runbooks for all critical systems,in_progress
+RISK-004,Compliance,GDPR data subject access requests exceeding SLA,2,4,8,nancy.miller@acme-corp.com,Automated DSAR workflow with self-service portal,mitigated
+RISK-005,Technical,Container orchestration failure during peak load,3,4,12,kevin.martin@acme-corp.com,Horizontal pod autoscaler with cluster autoscaler and load testing,mitigated
+RISK-006,Security,Supply chain attack via compromised open-source dependency,3,5,15,michelle.jackson@acme-corp.com,Software composition analysis in CI/CD and dependency pinning,in_progress
+RISK-007,Financial,Cloud cost overrun due to unmonitored resource sprawl,4,3,12,anna.kowalski@acme-corp.com,FinOps practice with budget alerts and automated resource tagging,mitigated
+RISK-008,Operational,Disaster recovery plan not tested within 12 months,2,5,10,kevin.martin@acme-corp.com,Quarterly DR drills with documented results and improvement actions,mitigated
+RISK-009,Security,Insider threat from over-privileged service accounts,3,5,15,lisa.nguyen@acme-corp.com,Implement least privilege with regular access reviews and JIT access,in_progress
+RISK-010,Technical,Data corruption from concurrent write operations,2,5,10,karen.smith@acme-corp.com,Optimistic locking with conflict detection and automated integrity checks,mitigated
+RISK-011,Compliance,SOC 2 audit finding on change management process gaps,3,3,9,sarah.chen@acme-corp.com,Formalized change advisory board and automated change tracking,mitigated
+RISK-012,Operational,Monitoring blind spots in microservice communication,4,3,12,anna.kowalski@acme-corp.com,Service mesh with distributed tracing and SLO-based alerting,in_progress
+RISK-013,Security,API authentication bypass via token manipulation,2,5,10,michelle.jackson@acme-corp.com,JWT validation hardening with short-lived tokens and refresh rotation,mitigated
+RISK-014,Technical,Legacy system integration failures during migration,4,3,12,peter.garcia@acme-corp.com,Strangler fig pattern with comprehensive integration test suite,in_progress
+RISK-015,Financial,Vendor lock-in limiting negotiation leverage for cloud services,3,3,9,mark.wilson@acme-corp.com,Multi-cloud abstraction layer and contractual exit clauses,accepted
+RISK-016,Compliance,Data residency violation from cross-region replication,2,5,10,lisa.nguyen@acme-corp.com,Geo-fencing configuration with automated compliance validation,mitigated
+RISK-017,Operational,Deployment pipeline failure causing extended release delays,3,3,9,emily.watson@acme-corp.com,Pipeline redundancy with manual deployment runbook as fallback,mitigated
+RISK-018,Security,Unencrypted data in transit between internal services,2,4,8,lisa.nguyen@acme-corp.com,Mutual TLS enforcement via service mesh with certificate rotation,mitigated
+RISK-019,Technical,Memory leak in long-running background processing services,3,3,9,david.lee@acme-corp.com,Memory profiling in staging and automated pod restart on threshold,mitigated
+RISK-020,Compliance,Third-party vendor failing to meet SLA commitments,3,4,12,nancy.miller@acme-corp.com,Vendor performance monitoring with contractual penalty clauses,in_progress

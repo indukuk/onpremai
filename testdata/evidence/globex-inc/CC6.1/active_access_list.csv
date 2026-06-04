@@ -1,0 +1,21 @@
+email,name,role,access_level,mfa_enabled
+jsmith@globex-inc.com,John Smith,CTO,admin,true
+mjones@globex-inc.com,Mary Jones,Developer,standard,
+kwilson@globex-inc.com,Kevin Wilson,Team Lead,elevated,
+agarcia@globex-inc.com,Ana Garcia,Developer,standard,
+blee@globex-inc.com,Brian Lee,DevOps,elevated,
+cpark@globex-inc.com,Christine Park,QA,standard,
+dthomas@globex-inc.com,Derek Thomas,Developer,standard,
+ewang@globex-inc.com,Eric Wang,DBA,admin,
+fchen@globex-inc.com,Fiona Chen,Product Manager,standard,
+ghall@globex-inc.com,George Hall,Support,standard,
+hkim@globex-inc.com,Hannah Kim,Security,elevated,
+iroberts@globex-inc.com,Ian Roberts,Developer,standard,
+jnguyen@globex-inc.com,Julie Nguyen,Designer,standard,
+kbrown@globex-inc.com,Kyle Brown,Developer,standard,
+lmartin@globex-inc.com,Laura Martin,Team Lead,elevated,true
+mclark@globex-inc.com,Mike Clark,Developer,standard,
+nwhite@globex-inc.com,Natalie White,QA,standard,
+ojohnson@globex-inc.com,Omar Johnson,DevOps,elevated,
+pscott@globex-inc.com,Priya Scott,Developer,standard,true
+qadams@globex-inc.com,Quinn Adams,Intern,standard,true

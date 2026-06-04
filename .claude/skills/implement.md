@@ -1,27 +1,14 @@
-# Skill: Implement
+---
+name: implement
+description: Implement code for services in this compliance AI system. Use this skill whenever the user asks to implement a feature, write code, add an endpoint, create a module, refactor, fix a bug, or build any part of a service. Also triggers when user mentions coding patterns, conventions, or asks "how should I structure this code."
+---
 
-## Purpose
-Implement code for services in this project. Knows the architecture, conventions, and patterns to follow.
+# Implement
 
-## Tech Stack
-- Python 3.11+
-- FastAPI (HTTP services)
-- Pydantic (data models, validation)
-- httpx (async HTTP client)
-- asyncio (async operations)
-- PostgreSQL + pgvector (via asyncpg or psycopg2)
-- Redis (via redis-py async)
-- Docker (containerization)
-- pytest (testing)
+Write production code for services in this on-prem compliance AI system. Every service follows identical patterns — this skill encodes those patterns so implementations stay consistent across the 8 services.
 
-## When to use
-- User asks to implement a feature, service, endpoint, or module
-- User asks to refactor existing code
-- User asks to fix a bug
+## Project Structure Per Service
 
-## Instructions
-
-### Project structure per service
 ```
 {service}/
 ├── Dockerfile
@@ -44,20 +31,31 @@ Implement code for services in this project. Knows the architecture, conventions
     └── logger.py
 ```
 
-### Conventions
+## Implementation Order
 
-**FastAPI patterns:**
+When building from scratch, implement in this exact sequence — each step depends on the previous:
+
+1. `src/config.py` — all env vars with defaults (other modules import this)
+2. `src/models.py` — Pydantic request/response models (routes and logic reference these)
+3. `src/main.py` — FastAPI skeleton with lifespan, health/ready
+4. `src/{domain}/` — core business logic (the hard part)
+5. Wire common/ clients into the domain layer
+6. Connect routes to domain logic
+7. Write tests alongside (unit first, integration after)
+8. `Dockerfile` + `requirements.txt`
+9. Update `docker-compose.yml` if new service
+
+## Conventions
+
+**FastAPI app structure:**
 ```python
-# main.py structure
 from fastapi import FastAPI, HTTPException, Depends
 from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: connect to services, log startup sequence
     await startup()
     yield
-    # Shutdown: close connections gracefully
     await shutdown()
 
 app = FastAPI(title="{service-name}", lifespan=lifespan)
@@ -68,13 +66,11 @@ async def health():
 
 @app.get("/ready")
 async def ready():
-    # Check all dependencies
     return {"status": "ready", "dependencies": {...}}
 ```
 
-**Configuration:**
+**Configuration — always from environment:**
 ```python
-# config.py — always from environment with defaults
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
@@ -82,63 +78,51 @@ class Settings(BaseSettings):
     memory_url: str = "http://memory-service:5000"
     storage_endpoint: str = "http://minio:9000"
     log_level: str = "info"
-    
+
     class Config:
         env_file = ".env"
 
 settings = Settings()
 ```
 
-**Async-first:**
+**Async-first everywhere:**
 - All HTTP handlers are `async def`
-- All external calls use `httpx.AsyncClient` (not `requests`)
+- All external calls use `httpx.AsyncClient` (never `requests`)
 - Use `asyncio.gather()` for parallel independent calls
-- Use `asyncio.create_task()` for fire-and-forget (post-processing)
+- Use `asyncio.create_task()` for fire-and-forget post-processing
 
-**Error handling:**
-- Raise `HTTPException` for API errors (with appropriate status codes)
-- Use structured logging for internal errors (never crash silently)
-- Graceful degradation: if optional service is down, continue with reduced functionality
-
-**Logging:**
+**Structured logging:**
 ```python
 from common.logger import AgentLogger
-
 logger = AgentLogger(agent_name="compliance-assistant")
 logger.info("Request processed", control="CC6.1", duration_ms=4200)
 ```
 
-**No hardcoded values:**
-- No URLs, no model names, no secrets in source code
-- All external references via config/environment
-- All prompts loaded from memory service (with hardcoded fallback)
+**Type hints on everything** — parameters, returns, class attributes.
 
-**Type hints everywhere:**
-```python
-async def evaluate_control(
-    control_id: str,
-    framework: str,
-    evidence: list[Evidence],
-) -> EvaluationResult:
-```
+## What Never to Do
 
-### What NOT to do
 - No global mutable state (use dependency injection)
 - No `import *`
-- No bare `except:` (always catch specific exceptions)
+- No bare `except:` (catch specific exceptions)
 - No `print()` (use structured logger)
-- No synchronous blocking calls in async context
-- No secrets in source code, comments, or variable names
-- No business logic in route handlers (keep them thin, delegate to service layer)
+- No synchronous blocking in async context
+- No secrets in source, comments, or variable names
+- No business logic in route handlers (keep thin, delegate to service layer)
+- No hardcoded URLs, model names, or provider IDs
+- No direct `boto3` or provider SDK imports (use common/ abstractions)
 
-### When implementing a new service from scratch
-1. Read REQUIREMENTS.md and DESIGN.md for that service
-2. Create directory structure (as above)
-3. Implement config.py first (all env vars with defaults)
-4. Implement main.py with health/ready endpoints
-5. Implement common/ client usage
-6. Implement core business logic
-7. Write unit tests alongside implementation
-8. Create Dockerfile
-9. Add to docker-compose.yml
-10. Test locally: `docker compose up -d {service} && docker compose logs -f {service}`
+## Validation Checklist
+
+After writing each file, verify:
+```bash
+python -c "import ast; ast.parse(open('{file}').read())"
+```
+
+Before considering implementation complete:
+- All files pass syntax check
+- All imports resolve (no circular deps)
+- Config has defaults for all env vars
+- Health/ready endpoints exist and return correct schema
+- Structured logging on startup with service identity
+- Graceful degradation if optional deps are down

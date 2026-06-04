@@ -1,0 +1,148 @@
+{
+  "framework": "ISO27001",
+  "version": "2022",
+  "annex": "A",
+  "issued_by": "ISO/IEC",
+  "controls": [
+    {
+      "id": "A.5.1",
+      "category": "Organizational Controls",
+      "title": "Policies for Information Security",
+      "description": "Information security policy and topic-specific policies shall be defined, approved by management, published, communicated to and acknowledged by relevant personnel and relevant interested parties, and reviewed at planned intervals and if significant changes occur.",
+      "implementation_guidance": "Develop a comprehensive information security policy approved by top management. Create topic-specific policies for areas such as access control, cryptography, and physical security. Communicate policies to all relevant personnel and obtain acknowledgment. Review policies at least annually or when significant changes occur. Maintain version control and distribution records."
+    },
+    {
+      "id": "A.5.2",
+      "category": "Organizational Controls",
+      "title": "Information Security Roles and Responsibilities",
+      "description": "Information security roles and responsibilities shall be defined and allocated.",
+      "implementation_guidance": "Define information security responsibilities in job descriptions. Assign an information security management role (CISO or equivalent). Establish clear ownership for information assets. Document the information security organizational structure. Ensure segregation of duties where conflicts of interest may arise."
+    },
+    {
+      "id": "A.5.3",
+      "category": "Organizational Controls",
+      "title": "Segregation of Duties",
+      "description": "Conflicting duties and conflicting areas of responsibility shall be segregated.",
+      "implementation_guidance": "Identify activities where segregation is needed (e.g., request/approve, develop/deploy, administer/audit). Implement technical controls to enforce segregation. Where segregation is not feasible, implement compensating controls such as monitoring, audit trails, and management supervision. Document all segregation arrangements and exceptions."
+    },
+    {
+      "id": "A.5.4",
+      "category": "Organizational Controls",
+      "title": "Management Responsibilities",
+      "description": "Management shall require all personnel to apply information security in accordance with the established information security policy and topic-specific policies of the organization.",
+      "implementation_guidance": "Ensure management communicates the importance of information security. Include security responsibilities in employment contracts and terms. Provide adequate resources for information security activities. Lead by example in following security policies. Review and address non-compliance through appropriate channels."
+    },
+    {
+      "id": "A.5.10",
+      "category": "Organizational Controls",
+      "title": "Acceptable Use of Information and Other Associated Assets",
+      "description": "Rules for the acceptable use of information and other associated assets shall be identified, documented and implemented.",
+      "implementation_guidance": "Define acceptable use policies covering internet, email, mobile devices, social media, and cloud services. Communicate acceptable use requirements during onboarding and annually. Implement technical controls to enforce acceptable use where feasible. Monitor for policy violations. Define consequences for non-compliance."
+    },
+    {
+      "id": "A.5.23",
+      "category": "Organizational Controls",
+      "title": "Information Security for Use of Cloud Services",
+      "description": "Processes for acquisition, use, management and exit from cloud services shall be established in accordance with the organization's information security requirements.",
+      "implementation_guidance": "Define cloud security requirements and acceptable cloud services. Assess cloud provider security before adoption. Establish shared responsibility models for each service. Implement monitoring and governance for cloud environments. Define exit strategies including data portability and deletion verification."
+    },
+    {
+      "id": "A.5.29",
+      "category": "Organizational Controls",
+      "title": "Information Security During Disruption",
+      "description": "The organization shall plan how to maintain information security at an appropriate level during disruption.",
+      "implementation_guidance": "Integrate information security into business continuity planning. Define security requirements for alternative processing arrangements. Test security controls in disaster recovery scenarios. Maintain security monitoring during disruptions. Document security exceptions permitted during emergencies."
+    },
+    {
+      "id": "A.6.1",
+      "category": "People Controls",
+      "title": "Screening",
+      "description": "Background verification checks on all candidates to become personnel shall be carried out prior to joining the organization and on an ongoing basis taking into consideration applicable laws, regulations and ethics and be proportional to the business requirements, the classification of the information to be accessed and the perceived risks.",
+      "implementation_guidance": "Conduct background checks proportionate to role sensitivity before employment. Verify qualifications, employment history, and references. Perform criminal record checks where legally permitted and appropriate. Re-screen personnel when moving to higher-trust roles. Document screening procedures and results securely."
+    },
+    {
+      "id": "A.6.2",
+      "category": "People Controls",
+      "title": "Terms and Conditions of Employment",
+      "description": "The employment contractual agreements shall state the personnel's and the organization's responsibilities for information security.",
+      "implementation_guidance": "Include information security responsibilities in employment contracts. Define confidentiality and non-disclosure obligations. Specify obligations regarding intellectual property. State consequences of security policy violations. Include post-employment security obligations. Obtain signed acknowledgment from all personnel."
+    },
+    {
+      "id": "A.6.3",
+      "category": "People Controls",
+      "title": "Information Security Awareness, Education and Training",
+      "description": "Personnel of the organization and relevant interested parties shall receive appropriate information security awareness education and training and regular updates of the organization's information security policy, topic-specific policies and procedures, as relevant for their job function.",
+      "implementation_guidance": "Develop role-based security awareness training programs. Deliver training during onboarding and annually thereafter. Include current threats, social engineering, and incident reporting. Track training completion and assess effectiveness. Provide specialized training for technical roles (secure coding, incident response, etc.)."
+    },
+    {
+      "id": "A.6.4",
+      "category": "People Controls",
+      "title": "Disciplinary Process",
+      "description": "A disciplinary process shall be formalized and communicated to take actions against personnel and other relevant interested parties who have committed an information security policy violation.",
+      "implementation_guidance": "Define a formal disciplinary process for security violations. Ensure the process is fair, proportionate, and consistently applied. Communicate the process to all personnel. Document all disciplinary actions taken. Include graduated responses from warnings to termination."
+    },
+    {
+      "id": "A.7.1",
+      "category": "Physical Controls",
+      "title": "Physical Security Perimeters",
+      "description": "Security perimeters shall be defined and used to protect areas that contain information and other associated assets.",
+      "implementation_guidance": "Define physical security zones based on information sensitivity. Implement barriers appropriate to each zone (walls, locked doors, gates). Ensure perimeters have no gaps that could be exploited. Install intrusion detection systems on perimeter boundaries. Maintain perimeter security equipment and test regularly."
+    },
+    {
+      "id": "A.7.2",
+      "category": "Physical Controls",
+      "title": "Physical Entry",
+      "description": "Secure areas shall be protected by appropriate entry controls and access points.",
+      "implementation_guidance": "Implement access control systems (badge readers, biometrics) for secure areas. Maintain visitor management procedures including registration and escort. Log all physical access with date, time, and identity. Review physical access logs regularly. Restrict data center access to authorized personnel only."
+    },
+    {
+      "id": "A.8.1",
+      "category": "Technological Controls",
+      "title": "User Endpoint Devices",
+      "description": "Information stored on, processed by or accessible via user endpoint devices shall be protected.",
+      "implementation_guidance": "Implement endpoint protection solutions (EDR/XDR). Enforce full disk encryption on all endpoints. Deploy mobile device management (MDM) for corporate and BYOD devices. Implement application control and allowlisting. Configure automatic screen lock and inactivity timeout. Maintain endpoint inventory with security status."
+    },
+    {
+      "id": "A.8.2",
+      "category": "Technological Controls",
+      "title": "Privileged Access Rights",
+      "description": "The allocation and use of privileged access rights shall be restricted and managed.",
+      "implementation_guidance": "Implement privileged access management (PAM) solutions. Restrict privileged accounts to minimum necessary. Require MFA for all privileged access. Log and monitor all privileged account activity. Implement just-in-time (JIT) access for administrative tasks. Conduct quarterly reviews of privileged access assignments. Use separate accounts for administrative and standard activities."
+    },
+    {
+      "id": "A.8.5",
+      "category": "Technological Controls",
+      "title": "Secure Authentication",
+      "description": "Secure authentication technologies and procedures shall be established and implemented based on information access restrictions and the topic-specific policy on access control.",
+      "implementation_guidance": "Implement multi-factor authentication for sensitive systems. Enforce strong password policies with complexity and history requirements. Implement account lockout after failed attempts. Use secure protocols for authentication (OAuth 2.0, SAML, FIDO2). Protect authentication credentials in storage and transit. Implement session management with appropriate timeouts."
+    },
+    {
+      "id": "A.8.8",
+      "category": "Technological Controls",
+      "title": "Management of Technical Vulnerabilities",
+      "description": "Information about technical vulnerabilities of information systems in use shall be obtained, the organization's exposure to such vulnerabilities shall be evaluated and appropriate measures shall be taken.",
+      "implementation_guidance": "Implement regular vulnerability scanning (weekly for production, monthly for non-production). Subscribe to vendor security advisories and CVE feeds. Define patching SLAs based on severity (critical: 72 hours, high: 7 days, medium: 30 days). Track vulnerability remediation to closure. Conduct annual penetration testing by qualified assessors. Maintain a vulnerability management program with defined processes."
+    },
+    {
+      "id": "A.8.9",
+      "category": "Technological Controls",
+      "title": "Configuration Management",
+      "description": "Configurations, including security configurations, of hardware, software, services and networks shall be established, documented, implemented, monitored and reviewed.",
+      "implementation_guidance": "Define and document security configuration baselines for all system types. Implement configuration management tools to enforce baselines. Monitor for configuration drift with automated detection. Review configurations periodically and after changes. Maintain hardening guides based on CIS Benchmarks or equivalent. Test configuration changes before production deployment."
+    },
+    {
+      "id": "A.8.15",
+      "category": "Technological Controls",
+      "title": "Logging",
+      "description": "Logs that record activities, exceptions, faults and other relevant events shall be produced, stored, protected and analysed.",
+      "implementation_guidance": "Define logging requirements for all systems (what to log, retention period). Centralize log collection in a SIEM or log management platform. Protect log integrity (write-once storage, tamper detection). Retain logs per regulatory and business requirements (minimum 12 months online, 7 years archive). Implement automated log analysis and alerting. Synchronize time sources across all systems (NTP)."
+    },
+    {
+      "id": "A.8.16",
+      "category": "Technological Controls",
+      "title": "Monitoring Activities",
+      "description": "Networks, systems and applications shall be monitored for anomalous behaviour and appropriate actions taken to evaluate potential information security incidents.",
+      "implementation_guidance": "Implement continuous security monitoring across networks, systems, and applications. Define baseline behavior and detect anomalies. Establish alerting thresholds and escalation procedures. Implement network traffic analysis and DDoS detection. Monitor for indicators of compromise (IOCs). Maintain 24/7 monitoring capability for critical systems."
+    }
+  ]
+}

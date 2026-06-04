@@ -6,6 +6,17 @@ Exposes the compliance platform's capabilities as a standard MCP (Model Context 
 
 The AI assistant is a **feature**, not a core dependency. If a customer disables it, the MCP route returns 404 and everything else continues working.
 
+## System Requirements Covered
+
+| System Requirement | This module's role | Requirement ID |
+|---|---|---|
+| Graceful Degradation | Returns 404 if AI feature disabled per tenant | R1, R10b |
+| PII-Aware Logging | Audit logs full data for tool call accountability | R1 |
+| Shadow AI per User | Filters tools/resources by user role (pre-filtered tool list) | R5 |
+| Multi-Tenant Isolation | RBAC + scope checks on every tool call, JWT validation | R5 |
+| Human-in-the-Loop | confirmation_required flag on destructive tools | R6 |
+| Independent Deploy | Ships with backend image (not a separate container) | R8 |
+
 ## Why MCP as a Backend Module (not a separate service)
 
 1. **Same business logic**: MCP tools call the same service layer as the REST API. No duplication.

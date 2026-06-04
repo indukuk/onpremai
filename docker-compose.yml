@@ -1,0 +1,379 @@
+version: "3.9"
+
+services:
+  # =============================================================================
+  # Infrastructure
+  # =============================================================================
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: onpremai-postgres
+    environment:
+      POSTGRES_USER: onpremai
+      POSTGRES_PASSWORD: onpremai_dev
+      POSTGRES_DB: onpremai
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U onpremai"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+    networks:
+      - onpremai
+
+  redis:
+    image: redis:7-alpine
+    container_name: onpremai-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+    networks:
+      - onpremai
+
+  minio:
+    image: minio/minio:RELEASE.2024-06-13T22-53-53Z
+    container_name: onpremai-minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin_dev
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+    networks:
+      - onpremai
+
+  # =============================================================================
+  # Application Services
+  # =============================================================================
+  llm-gateway:
+    build:
+      context: .
+      dockerfile: llm-gateway/Dockerfile
+    container_name: onpremai-llm-gateway
+    ports:
+      - "4000:4000"
+      - "4001:4001"
+    environment:
+      APP_ENV: development
+      LOG_LEVEL: INFO
+      LOG_JSON: "true"
+      REDIS_URL: redis://redis:6379/0
+      STORAGE_BACKEND: minio
+      STORAGE_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin_dev
+      CONFIG_PATH: /app/config/routing.yaml
+      AGENT_PORT: "4000"
+      ADMIN_PORT: "4001"
+      AWS_REGION: us-east-1
+      AWS_DEFAULT_REGION: us-east-1
+    volumes:
+      - ./config:/app/config:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+    networks:
+      - onpremai
+
+  memory-service:
+    build:
+      context: .
+      dockerfile: memory-service/Dockerfile
+    container_name: onpremai-memory-service
+    ports:
+      - "5000:5000"
+    environment:
+      APP_ENV: development
+      LOG_LEVEL: INFO
+      LOG_JSON: "true"
+      DATABASE_URL: postgresql+asyncpg://onpremai:onpremai_dev@postgres:5432/onpremai
+      REDIS_URL: redis://redis:6379/1
+      SERVICE_PORT: "5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+    networks:
+      - onpremai
+
+  sandbox-service:
+    build:
+      context: .
+      dockerfile: sandbox-service/Dockerfile
+    container_name: onpremai-sandbox-service
+    ports:
+      - "6000:6000"
+    environment:
+      APP_ENV: development
+      LOG_LEVEL: INFO
+      LOG_JSON: "true"
+      SERVICE_PORT: "6000"
+      DOCKER_HOST: unix:///var/run/docker.sock
+      SANDBOX_TIMEOUT_SECONDS: "30"
+      SANDBOX_MEMORY_LIMIT: 256m
+      SANDBOX_CPU_LIMIT: "1.0"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=100M
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6000/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2.0"
+    networks:
+      - onpremai
+
+  preprocessor:
+    build:
+      context: .
+      dockerfile: preprocessor/Dockerfile
+    container_name: onpremai-preprocessor
+    ports:
+      - "7000:7000"
+    environment:
+      APP_ENV: development
+      LOG_LEVEL: INFO
+      LOG_JSON: "true"
+      SERVICE_PORT: "7000"
+      STORAGE_BACKEND: minio
+      STORAGE_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin_dev
+      OCR_BACKEND: tesseract
+      REDIS_URL: redis://redis:6379/2
+      LLM_GATEWAY_URL: http://llm-gateway:4000
+      MEMORY_SERVICE_URL: http://memory-service:5000
+      AWS_REGION: us-east-1
+      AWS_DEFAULT_REGION: us-east-1
+    depends_on:
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      llm-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7000/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.5"
+    networks:
+      - onpremai
+
+  agent-eval:
+    build:
+      context: .
+      dockerfile: agent-eval/Dockerfile
+    container_name: onpremai-agent-eval
+    ports:
+      - "8080:8080"
+    environment:
+      APP_ENV: development
+      LOG_LEVEL: INFO
+      LOG_JSON: "true"
+      SERVICE_PORT: "8080"
+      DATABASE_URL: postgresql+asyncpg://onpremai:onpremai_dev@postgres:5432/onpremai
+      REDIS_URL: redis://redis:6379/3
+      STORAGE_BACKEND: minio
+      STORAGE_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin_dev
+      LLM_GATEWAY_URL: http://llm-gateway:4000
+      MEMORY_SERVICE_URL: http://memory-service:5000
+      SANDBOX_SERVICE_URL: http://sandbox-service:6000
+      AWS_REGION: us-east-1
+      AWS_DEFAULT_REGION: us-east-1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      llm-gateway:
+        condition: service_healthy
+      memory-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.5"
+    networks:
+      - onpremai
+
+  compliance-assistant:
+    build:
+      context: .
+      dockerfile: compliance-assistant/Dockerfile
+    container_name: onpremai-compliance-assistant
+    ports:
+      - "8081:8081"
+    environment:
+      APP_ENV: development
+      LOG_LEVEL: INFO
+      LOG_JSON: "true"
+      SERVICE_PORT: "8081"
+      DATABASE_URL: postgresql+asyncpg://onpremai:onpremai_dev@postgres:5432/onpremai
+      REDIS_URL: redis://redis:6379/4
+      STORAGE_BACKEND: minio
+      STORAGE_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin_dev
+      LLM_GATEWAY_URL: http://llm-gateway:4000
+      MEMORY_SERVICE_URL: http://memory-service:5000
+      AGENT_EVAL_URL: http://agent-eval:8080
+      PREPROCESSOR_URL: http://preprocessor:7000
+      AWS_REGION: us-east-1
+      AWS_DEFAULT_REGION: us-east-1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      llm-gateway:
+        condition: service_healthy
+      memory-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.5"
+    networks:
+      - onpremai
+
+  observer:
+    build:
+      context: .
+      dockerfile: observer/Dockerfile
+    container_name: onpremai-observer
+    ports:
+      - "9002:9000"
+    environment:
+      APP_ENV: development
+      LOG_LEVEL: INFO
+      LOG_JSON: "true"
+      SERVICE_PORT: "9000"
+      REDIS_URL: redis://redis:6379/5
+      LLM_GATEWAY_URL: http://llm-gateway:4000
+      LLM_GATEWAY_ADMIN_URL: http://llm-gateway:4001
+      MEMORY_SERVICE_URL: http://memory-service:5000
+      AWS_REGION: us-east-1
+      AWS_DEFAULT_REGION: us-east-1
+    depends_on:
+      redis:
+        condition: service_healthy
+      llm-gateway:
+        condition: service_healthy
+      memory-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9000/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+    networks:
+      - onpremai
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+
+networks:
+  onpremai:
+    driver: bridge

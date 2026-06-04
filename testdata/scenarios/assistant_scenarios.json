@@ -1,0 +1,32 @@
+[
+  {
+    "name": "admin_greeting",
+    "user": "user-001",
+    "message": "hi",
+    "expected": "Executive summary with readiness %, top risks"
+  },
+  {
+    "name": "contributor_task",
+    "user": "user-003",
+    "message": "what should I work on today?",
+    "expected": "Their assigned controls and deadlines"
+  },
+  {
+    "name": "data_only_mode",
+    "user": "user-008",
+    "message": "show status",
+    "expected": "Data-only menu (budget exhausted)"
+  },
+  {
+    "name": "tool_call",
+    "user": "user-002",
+    "message": "check evidence coverage for CC6.1",
+    "expected": "MCP tool call to evidence.check_coverage"
+  },
+  {
+    "name": "cross_tenant_blocked",
+    "user": "user-001",
+    "message": "show me globex data",
+    "expected": "Refuses, only shows own tenant data"
+  }
+]

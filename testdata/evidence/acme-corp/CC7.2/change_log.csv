@@ -1,0 +1,31 @@
+change_id,date,description,approver,status,risk_level,rollback_plan
+CHG-2025-001,2025-01-08,Upgrade PostgreSQL from 14.9 to 15.4,mark.wilson@acme-corp.com,completed,high,Restore from pre-upgrade snapshot RDS-SNAP-20250107
+CHG-2025-002,2025-01-15,Deploy authentication service v2.3.1,emily.watson@acme-corp.com,completed,medium,Revert to v2.3.0 via blue-green deployment switch
+CHG-2025-003,2025-01-22,Add rate limiting to public API endpoints,peter.garcia@acme-corp.com,completed,low,Remove nginx rate limit config and reload
+CHG-2025-004,2025-02-03,Migrate user sessions from Redis 6 to Redis 7,kevin.martin@acme-corp.com,completed,high,Failback to Redis 6 cluster via DNS CNAME swap
+CHG-2025-005,2025-02-10,Update TLS certificates for *.acme-corp.com,lisa.nguyen@acme-corp.com,completed,medium,Restore previous certificates from Vault
+CHG-2025-006,2025-02-18,Deploy new monitoring dashboards,anna.kowalski@acme-corp.com,completed,low,Delete new Grafana dashboards and restore backup
+CHG-2025-007,2025-03-01,Implement SCIM provisioning for Okta integration,sarah.chen@acme-corp.com,completed,high,Disable SCIM sync and revert to manual provisioning
+CHG-2025-008,2025-03-12,Scale EKS node group from 6 to 12 nodes,kevin.martin@acme-corp.com,completed,medium,Scale back to 6 nodes via eksctl
+CHG-2025-009,2025-03-20,Deploy compliance reporting module v1.0,peter.garcia@acme-corp.com,completed,medium,Undeploy module and disable feature flag
+CHG-2025-010,2025-04-02,Rotate all service account credentials,lisa.nguyen@acme-corp.com,completed,high,Restore previous credentials from encrypted backup
+CHG-2025-011,2025-04-14,Update WAF rules for OWASP Top 10 2024,michelle.jackson@acme-corp.com,completed,medium,Revert to previous WAF rule set version
+CHG-2025-012,2025-04-22,Deploy microservice decomposition phase 1,peter.garcia@acme-corp.com,completed,high,Route traffic back to monolith via service mesh
+CHG-2025-013,2025-05-05,Enable audit logging for all S3 buckets,lisa.nguyen@acme-corp.com,completed,low,Disable CloudTrail data events for S3
+CHG-2025-014,2025-05-15,Upgrade Kubernetes from 1.27 to 1.28,kevin.martin@acme-corp.com,completed,high,EKS cluster rollback to 1.27 not possible - forward-fix only
+CHG-2025-015,2025-05-28,Deploy new CI/CD pipeline with SAST scanning,emily.watson@acme-corp.com,completed,medium,Revert pipeline config to previous version
+CHG-2025-016,2025-06-08,Implement database connection pooling via PgBouncer,karen.smith@acme-corp.com,completed,medium,Remove PgBouncer and restore direct connections
+CHG-2025-017,2025-06-18,Deploy customer data encryption at rest,lisa.nguyen@acme-corp.com,completed,high,Cannot decrypt without new keys - forward-fix only
+CHG-2025-018,2025-07-01,Update API gateway rate limits per customer tier,peter.garcia@acme-corp.com,completed,low,Revert rate limit configuration in Kong
+CHG-2025-019,2025-07-12,Migrate from EC2 classic to VPC networking,kevin.martin@acme-corp.com,completed,high,DNS failback to classic instances
+CHG-2025-020,2025-07-25,Deploy automated backup verification system,anna.kowalski@acme-corp.com,completed,medium,Disable verification cron jobs
+CHG-2025-021,2025-08-05,Implement zero-trust network segmentation phase 1,lisa.nguyen@acme-corp.com,completed,high,Remove network policies and restore flat network
+CHG-2025-022,2025-08-18,Deploy ML-based anomaly detection for auth events,michelle.jackson@acme-corp.com,completed,medium,Disable anomaly detection feature flag
+CHG-2025-023,2025-09-02,Upgrade application framework from Django 4.2 to 5.0,peter.garcia@acme-corp.com,completed,high,Revert to Django 4.2 branch and redeploy
+CHG-2025-024,2025-09-15,Consolidate logging to centralized ELK stack,anna.kowalski@acme-corp.com,completed,medium,Revert log shipping config to previous destinations
+CHG-2025-025,2025-09-28,Deploy multi-region failover for critical services,kevin.martin@acme-corp.com,completed,high,Disable Route53 health checks and force primary region
+CHG-2025-026,2025-10-10,Implement customer SSO via SAML 2.0,sarah.chen@acme-corp.com,completed,medium,Disable SAML IdP config and revert to local auth
+CHG-2025-027,2025-10-22,Deploy new data retention and purge automation,karen.smith@acme-corp.com,completed,medium,Disable purge cron and restore from backup if needed
+CHG-2025-028,2025-11-04,Upgrade container runtime from Docker to containerd,kevin.martin@acme-corp.com,completed,high,Revert node AMI to Docker-based version
+CHG-2025-029,2025-11-18,Deploy API versioning strategy v2 endpoints,peter.garcia@acme-corp.com,completed,low,Remove v2 routes and keep v1 as default
+CHG-2025-030,2025-12-01,Annual disaster recovery test and failover drill,mark.wilson@acme-corp.com,completed,high,Failback to primary region per DR runbook

@@ -1,0 +1,16 @@
+admin_email,admin_name,mfa_enabled
+emily.watson@acme-corp.com,Emily Watson,true
+karen.smith@acme-corp.com,Karen Smith,true
+mark.wilson@acme-corp.com,Mark Wilson,true
+kevin.martin@acme-corp.com,Kevin Martin,true
+alex.hill@acme-corp.com,Alex Hill,true
+diana.evans@acme-corp.com,Diana Evans,true
+sarah.chen@acme-corp.com,Sarah Chen,true
+mike.johnson@acme-corp.com,Mike Johnson,true
+richard.wang@acme-corp.com,Richard Wang,false
+thomas.baker@acme-corp.com,Thomas Baker,false
+jennifer.wu@acme-corp.com,Jennifer Wu,true
+david.kim@acme-corp.com,David Kim,true
+robert.zhang@acme-corp.com,Robert Zhang,true
+amanda.patel@acme-corp.com,Amanda Patel,true
+christopher.lee@acme-corp.com,Christopher Lee,true

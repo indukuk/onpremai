@@ -1,0 +1,190 @@
+{
+  "framework": "SOC2",
+  "version": "2017",
+  "trust_services_category": "Security (Common Criteria)",
+  "issued_by": "AICPA",
+  "controls": [
+    {
+      "id": "CC1.1",
+      "category": "Control Environment",
+      "title": "COSO Principle 1: Demonstrates Commitment to Integrity and Ethical Values",
+      "description": "The entity demonstrates a commitment to integrity and ethical values through its governance structure, codes of conduct, and tone at the top established by board and management.",
+      "implementation_guidance": "Establish a code of conduct or ethics policy. Communicate it to all employees annually. Require signed acknowledgment. Board and executive leadership should visibly reinforce ethical behavior. Implement a whistleblower mechanism for reporting concerns."
+    },
+    {
+      "id": "CC1.2",
+      "category": "Control Environment",
+      "title": "COSO Principle 2: Board Independence and Oversight",
+      "description": "The board of directors demonstrates independence from management and exercises oversight of the development and performance of internal control.",
+      "implementation_guidance": "Maintain board independence with a majority of non-executive members. Establish an audit committee with relevant expertise. Conduct quarterly reviews of internal control effectiveness. Document board meeting minutes with evidence of control discussions."
+    },
+    {
+      "id": "CC1.3",
+      "category": "Control Environment",
+      "title": "COSO Principle 3: Management Establishes Structure, Authority, and Responsibility",
+      "description": "Management establishes, with board oversight, structures, reporting lines, and appropriate authorities and responsibilities in the pursuit of objectives.",
+      "implementation_guidance": "Define organizational charts with clear reporting lines. Document roles and responsibilities for all positions with control-relevant duties. Establish authority matrices for approvals and escalation paths. Review and update organizational structure at least annually."
+    },
+    {
+      "id": "CC1.4",
+      "category": "Control Environment",
+      "title": "COSO Principle 4: Commitment to Competence",
+      "description": "The entity demonstrates a commitment to attract, develop, and retain competent individuals in alignment with objectives.",
+      "implementation_guidance": "Define competency requirements for each role. Implement hiring processes that validate qualifications. Provide annual training programs for security and compliance. Track training completion rates and certification currency. Conduct annual performance evaluations that include control responsibilities."
+    },
+    {
+      "id": "CC1.5",
+      "category": "Control Environment",
+      "title": "COSO Principle 5: Enforces Accountability",
+      "description": "The entity holds individuals accountable for their internal control responsibilities in the pursuit of objectives.",
+      "implementation_guidance": "Include control responsibilities in job descriptions. Tie security and compliance objectives to performance reviews. Implement consequences for control failures or policy violations. Track and report on accountability metrics quarterly."
+    },
+    {
+      "id": "CC2.1",
+      "category": "Communication and Information",
+      "title": "COSO Principle 13: Uses Relevant Information",
+      "description": "The entity obtains or generates and uses relevant, quality information to support the functioning of internal control.",
+      "implementation_guidance": "Implement logging and monitoring systems that capture security-relevant events. Establish data quality procedures for control-related information. Maintain an inventory of information sources used for control monitoring. Review information adequacy quarterly."
+    },
+    {
+      "id": "CC2.2",
+      "category": "Communication and Information",
+      "title": "COSO Principle 14: Internal Communication",
+      "description": "The entity internally communicates information, including objectives and responsibilities for internal control, necessary to support the functioning of internal control.",
+      "implementation_guidance": "Establish security awareness programs with regular communications. Distribute policy updates to all relevant personnel. Implement communication channels for reporting control issues. Conduct quarterly town halls or similar forums addressing security and compliance topics."
+    },
+    {
+      "id": "CC2.3",
+      "category": "Communication and Information",
+      "title": "COSO Principle 15: External Communication",
+      "description": "The entity communicates with external parties regarding matters affecting the functioning of internal control.",
+      "implementation_guidance": "Publish a security page or trust center for customers. Establish vulnerability disclosure procedures. Maintain communication channels with regulators and auditors. Implement breach notification procedures compliant with applicable regulations."
+    },
+    {
+      "id": "CC3.1",
+      "category": "Risk Assessment",
+      "title": "COSO Principle 6: Specifies Suitable Objectives",
+      "description": "The entity specifies objectives with sufficient clarity to enable the identification and assessment of risks relating to objectives.",
+      "implementation_guidance": "Document security objectives aligned with business goals. Define measurable targets for control effectiveness. Establish risk appetite and tolerance levels. Review and update objectives annually or when significant changes occur."
+    },
+    {
+      "id": "CC3.2",
+      "category": "Risk Assessment",
+      "title": "COSO Principle 7: Identifies and Analyzes Risk",
+      "description": "The entity identifies risks to the achievement of its objectives across the entity and analyzes risks as a basis for determining how the risks should be managed.",
+      "implementation_guidance": "Conduct annual risk assessments covering all in-scope systems. Maintain a risk register with likelihood and impact ratings. Perform threat modeling for new systems and major changes. Document risk analysis methodology and results."
+    },
+    {
+      "id": "CC3.3",
+      "category": "Risk Assessment",
+      "title": "COSO Principle 8: Considers Fraud Risk",
+      "description": "The entity considers the potential for fraud in assessing risks to the achievement of objectives.",
+      "implementation_guidance": "Include fraud risk scenarios in risk assessments. Implement segregation of duties for financial and privileged operations. Monitor for anomalous behavior patterns. Conduct background checks for personnel in sensitive roles."
+    },
+    {
+      "id": "CC3.4",
+      "category": "Risk Assessment",
+      "title": "COSO Principle 9: Identifies and Analyzes Significant Change",
+      "description": "The entity identifies and assesses changes that could significantly impact the system of internal control.",
+      "implementation_guidance": "Implement a change management process that evaluates control impact. Assess risks of new technologies, vendors, and business processes. Monitor regulatory changes affecting control requirements. Conduct impact assessments for organizational changes."
+    },
+    {
+      "id": "CC4.1",
+      "category": "Monitoring Activities",
+      "title": "COSO Principle 16: Ongoing and Separate Evaluations",
+      "description": "The entity selects, develops, and performs ongoing and/or separate evaluations to ascertain whether the components of internal control are present and functioning.",
+      "implementation_guidance": "Implement continuous monitoring tools for security controls. Conduct periodic internal audits of control effectiveness. Perform penetration testing at least annually. Run vulnerability scans on a defined schedule (weekly or monthly). Track control metrics and report deviations."
+    },
+    {
+      "id": "CC4.2",
+      "category": "Monitoring Activities",
+      "title": "COSO Principle 17: Evaluates and Communicates Deficiencies",
+      "description": "The entity evaluates and communicates internal control deficiencies in a timely manner to those parties responsible for taking corrective action.",
+      "implementation_guidance": "Establish deficiency reporting procedures with severity classification. Define remediation timelines based on risk level. Report control deficiencies to management and board as appropriate. Track remediation progress and verify closure."
+    },
+    {
+      "id": "CC5.1",
+      "category": "Control Activities",
+      "title": "COSO Principle 10: Selects and Develops Control Activities",
+      "description": "The entity selects and develops control activities that contribute to the mitigation of risks to the achievement of objectives to acceptable levels.",
+      "implementation_guidance": "Design controls that directly address identified risks. Document control objectives, procedures, and expected evidence. Implement both preventive and detective controls. Ensure controls are proportionate to risk levels."
+    },
+    {
+      "id": "CC5.2",
+      "category": "Control Activities",
+      "title": "COSO Principle 11: Technology General Controls",
+      "description": "The entity selects and develops general control activities over technology to support the achievement of objectives.",
+      "implementation_guidance": "Implement IT general controls including access management, change management, operations, and data backup. Establish technology governance processes. Maintain system documentation and configuration baselines. Implement automated controls where feasible."
+    },
+    {
+      "id": "CC5.3",
+      "category": "Control Activities",
+      "title": "COSO Principle 12: Deploys Through Policies and Procedures",
+      "description": "The entity deploys control activities through policies that establish what is expected and procedures that put policies into action.",
+      "implementation_guidance": "Maintain a policy framework covering all in-scope areas. Review and update policies at least annually. Ensure procedures exist for each policy with step-by-step guidance. Train personnel on relevant policies and procedures. Track policy acknowledgments."
+    },
+    {
+      "id": "CC6.1",
+      "category": "Logical and Physical Access Controls",
+      "title": "Logical Access Security",
+      "description": "The entity implements logical access security software, infrastructure, and architectures over protected information assets to protect them from security events.",
+      "implementation_guidance": "Implement role-based access control (RBAC) for all systems. Enforce multi-factor authentication for privileged and remote access. Deploy network segmentation and firewalls. Implement intrusion detection/prevention systems. Maintain access control lists with least-privilege principle."
+    },
+    {
+      "id": "CC6.2",
+      "category": "Logical and Physical Access Controls",
+      "title": "User Registration and Authorization",
+      "description": "Prior to issuing system credentials and granting system access, the entity registers and authorizes new internal and external users.",
+      "implementation_guidance": "Implement formal user provisioning workflows with manager approval. Verify identity before granting access. Document access request and approval records. Implement automated provisioning where possible with approval gates. Maintain user access matrices mapping roles to permissions."
+    },
+    {
+      "id": "CC6.3",
+      "category": "Logical and Physical Access Controls",
+      "title": "Access Removal",
+      "description": "The entity removes access to protected information assets when appropriate, such as upon termination or role change.",
+      "implementation_guidance": "Implement automated deprovisioning triggered by HR termination events. Remove access within 24 hours of termination. Conduct access reviews upon role changes. Disable dormant accounts after defined inactivity period (90 days). Log all access removal actions."
+    },
+    {
+      "id": "CC6.6",
+      "category": "Logical and Physical Access Controls",
+      "title": "Access Review",
+      "description": "The entity periodically reviews user access rights and removes access that is no longer appropriate.",
+      "implementation_guidance": "Conduct quarterly access reviews for privileged accounts. Perform semi-annual reviews for standard user access. Document review evidence including reviewer, date, and decisions. Remediate findings within 30 days. Report review completion rates to management."
+    },
+    {
+      "id": "CC6.7",
+      "category": "Logical and Physical Access Controls",
+      "title": "Physical Access Restrictions",
+      "description": "The entity restricts physical access to facilities and protected information assets to authorized personnel.",
+      "implementation_guidance": "Implement badge-based access control for facilities. Maintain visitor logs and escort procedures. Restrict data center access to authorized personnel. Monitor physical access with cameras and alarms. Review physical access logs monthly."
+    },
+    {
+      "id": "CC7.1",
+      "category": "System Operations",
+      "title": "Detection and Monitoring",
+      "description": "To meet its objectives, the entity uses detection and monitoring procedures to identify changes to configurations that result in the introduction of new vulnerabilities and susceptibilities to newly discovered vulnerabilities.",
+      "implementation_guidance": "Deploy SIEM or equivalent log aggregation and alerting. Implement vulnerability scanning on a weekly basis. Monitor configuration drift from approved baselines. Subscribe to threat intelligence feeds. Establish alert triage and escalation procedures."
+    },
+    {
+      "id": "CC7.2",
+      "category": "System Operations",
+      "title": "Incident Response",
+      "description": "The entity monitors system components and the operation of those components for anomalies that are indicative of malicious acts, natural disasters, and errors affecting the entity's ability to meet its objectives; anomalies are analyzed to determine whether they represent security events.",
+      "implementation_guidance": "Maintain a documented incident response plan. Define incident severity levels and response procedures. Establish an incident response team with defined roles. Conduct incident response tabletop exercises annually. Implement post-incident review processes."
+    },
+    {
+      "id": "CC7.3",
+      "category": "System Operations",
+      "title": "Incident Remediation",
+      "description": "The entity evaluates security events to determine whether they could or have resulted in a failure to meet objectives and, if so, takes appropriate action to prevent or address such failures.",
+      "implementation_guidance": "Implement root cause analysis for all significant incidents. Track remediation actions to completion. Communicate lessons learned to relevant teams. Update controls based on incident findings. Maintain an incident register with status tracking."
+    },
+    {
+      "id": "CC8.1",
+      "category": "Change Management",
+      "title": "Change Management Process",
+      "description": "The entity authorizes, designs, develops or acquires, configures, documents, tests, approves, and implements changes to infrastructure, data, software, and procedures to meet its objectives.",
+      "implementation_guidance": "Implement a formal change management process with CAB review. Require testing in non-production environments before deployment. Document change requests with business justification and risk assessment. Implement rollback procedures for all changes. Maintain change logs with approval evidence."
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+date,reviewer,user_reviewed,access_level,decision,notes
+2025-06-15,admin@globex-inc.com,jsmith@globex-inc.com,admin,approve,Reviewed
+2025-06-15,admin@globex-inc.com,mjones@globex-inc.com,standard,approve,OK
+2025-06-15,admin@globex-inc.com,kwilson@globex-inc.com,elevated,approve,Needs access

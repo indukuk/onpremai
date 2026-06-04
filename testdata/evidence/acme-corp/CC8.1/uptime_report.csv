@@ -1,0 +1,13 @@
+month,service,uptime_pct,incidents_count,mttr_minutes
+2025-01,api-gateway,99.94,2,10
+2025-02,api-gateway,99.99,1,5
+2025-03,api-gateway,99.98,1,7
+2025-04,api-gateway,99.97,2,22
+2025-05,api-gateway,99.95,2,26
+2025-06,api-gateway,99.99,1,6
+2025-07,api-gateway,99.92,2,56
+2025-08,api-gateway,99.98,1,20
+2025-09,api-gateway,99.96,2,17
+2025-10,api-gateway,99.99,0,0
+2025-11,api-gateway,99.99,0,0
+2025-12,api-gateway,99.97,1,15

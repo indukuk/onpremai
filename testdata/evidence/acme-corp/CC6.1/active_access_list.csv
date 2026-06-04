@@ -1,0 +1,46 @@
+email,name,role,access_level,mfa_enabled
+john.martinez@acme-corp.com,John Martinez,Software Engineer,standard,true
+emily.watson@acme-corp.com,Emily Watson,DevOps Lead,admin,true
+raj.patel@acme-corp.com,Raj Patel,Senior Engineer,standard,true
+lisa.nguyen@acme-corp.com,Lisa Nguyen,Security Lead,elevated,true
+karen.smith@acme-corp.com,Karen Smith,DBA,admin,true
+david.lee@acme-corp.com,David Lee,Backend Developer,standard,true
+anna.kowalski@acme-corp.com,Anna Kowalski,Infrastructure Lead,elevated,true
+chris.taylor@acme-corp.com,Chris Taylor,Frontend Developer,standard,true
+mark.wilson@acme-corp.com,Mark Wilson,CTO,admin,true
+susan.davis@acme-corp.com,Susan Davis,QA Engineer,standard,true
+peter.garcia@acme-corp.com,Peter Garcia,Senior Architect,elevated,true
+nancy.miller@acme-corp.com,Nancy Miller,Product Manager,standard,true
+james.anderson@acme-corp.com,James Anderson,Junior Developer,standard,true
+michelle.jackson@acme-corp.com,Michelle Jackson,Security Analyst,elevated,true
+daniel.white@acme-corp.com,Daniel White,Software Engineer,standard,true
+stephanie.harris@acme-corp.com,Stephanie Harris,QA Engineer,standard,true
+kevin.martin@acme-corp.com,Kevin Martin,Infrastructure Lead,admin,true
+laura.thompson@acme-corp.com,Laura Thompson,Software Engineer,standard,true
+brian.robinson@acme-corp.com,Brian Robinson,Developer,standard,true
+jason.lewis@acme-corp.com,Jason Lewis,Support Engineer,standard,true
+nicole.walker@acme-corp.com,Nicole Walker,Data Analyst,standard,true
+ryan.hall@acme-corp.com,Ryan Hall,Software Engineer,standard,true
+heather.allen@acme-corp.com,Heather Allen,Team Lead,elevated,true
+tyler.young@acme-corp.com,Tyler Young,Software Engineer,standard,true
+rachel.king@acme-corp.com,Rachel King,Software Engineer,standard,true
+megan.lopez@acme-corp.com,Megan Lopez,Software Engineer,standard,true
+alex.hill@acme-corp.com,Alex Hill,Platform Engineering Lead,admin,true
+samantha.scott@acme-corp.com,Samantha Scott,Developer,standard,true
+joshua.green@acme-corp.com,Joshua Green,Developer,standard,true
+ashley.adams@acme-corp.com,Ashley Adams,Security Engineer,elevated,true
+andrew.nelson@acme-corp.com,Andrew Nelson,Software Engineer,standard,true
+christina.carter@acme-corp.com,Christina Carter,Support Engineer,standard,true
+matthew.mitchell@acme-corp.com,Matthew Mitchell,Backend Developer,standard,true
+jennifer.perez@acme-corp.com,Jennifer Perez,DevOps Engineer,elevated,true
+timothy.roberts@acme-corp.com,Timothy Roberts,Software Engineer,standard,true
+victoria.turner@acme-corp.com,Victoria Turner,Frontend Developer,standard,true
+patrick.phillips@acme-corp.com,Patrick Phillips,Contractor,standard,true
+eric.parker@acme-corp.com,Eric Parker,Software Engineer,standard,true
+diana.evans@acme-corp.com,Diana Evans,DBA,admin,true
+gregory.edwards@acme-corp.com,Gregory Edwards,Software Engineer,standard,true
+maria.collins@acme-corp.com,Maria Collins,Product Manager,standard,true
+charles.stewart@acme-corp.com,Charles Stewart,Architect,elevated,true
+sandra.sanchez@acme-corp.com,Sandra Sanchez,Developer,standard,true
+frank.morris@acme-corp.com,Frank Morris,Software Engineer,standard,true
+rebecca.campbell@acme-corp.com,Rebecca Campbell,Operations Engineer,standard,true

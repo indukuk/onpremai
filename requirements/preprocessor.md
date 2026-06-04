@@ -4,6 +4,20 @@
 
 File ingestion and processing service. Takes raw uploads (Excel, CSV, PDF, Word, images) and converts them into structured metadata that evaluation agents can consume. Runs independently — triggered by file upload events.
 
+## System Requirements Covered
+
+| System Requirement | This module's role | Requirement ID |
+|---|---|---|
+| LLM Agnostic | Uses task="extract_schema" (optional, fast tier) | R5 |
+| Storage Agnostic | All file I/O via StorageClient (S3/MinIO) | R1 |
+| AWS-First w/ Adapters | Textract primary for OCR, Tesseract fallback for on-prem | R2 |
+| Graceful Degradation | Deterministic processing continues without LLM or Textract | R2, R5 |
+| PII-Aware Logging | All logs via AgentLogger, PII-free operational output | R8 |
+| Observability | Logs processing events, file types, errors | R8 |
+| Memory is Shared | Writes evidence-available facts to memory service | R4 |
+| Deterministic First | File parsing is deterministic (no LLM for most operations) | R3 |
+| Independent Deploy | Own image, PREPROC_VERSION tag | R8 |
+
 ## Current State (what exists in /Users/indukuk/compliance)
 
 - Lambda with S3 trigger
@@ -23,17 +37,19 @@ File ingestion and processing service. Takes raw uploads (Excel, CSV, PDF, Word,
 - Input: raw file from storage
 - Output: `metadata.json` written alongside the original file
 
-### R2: OCR/Text Extraction Agnostic
+### R2: OCR/Text Extraction — Adapter Pattern
 
-- MUST NOT depend on AWS Textract directly
-- Extraction backends (configurable):
-  - **Tesseract** (on-prem, free): for images and scanned PDFs
-  - **PyMuPDF/pdfplumber** (on-prem, free): for digital PDFs
+- MUST NOT hardcode any single extraction provider in business logic
+- Extraction backends (configurable via adapter pattern):
+  - **AWS Textract** (cloud, default): primary for images and scanned PDFs — highest accuracy
+  - **PyMuPDF/pdfplumber** (built-in, free): for digital PDFs — always available, no cloud cost
+  - **Tesseract** (on-prem, free): for images/scanned PDFs in air-gapped deployments
   - **Apache Tika** (on-prem, free): for Word/PowerPoint/email
-  - **AWS Textract** (cloud): when available and configured
-  - **Azure Document Intelligence** (cloud): alternative
-- Backend selected via config, not hardcoded
+  - **Azure Document Intelligence** (cloud): alternative for Azure deployments
+- Backend selected via `OCR_BACKEND` env var, not hardcoded
 - Fallback chain: try primary backend, fall back to secondary on failure
+- **AWS-first default**: Textract for OCR, pdfplumber for digital PDFs (no OCR needed)
+- **Credit exhaustion**: if Textract returns throttling/quota errors, fall back to Tesseract automatically
 
 ### R3: Processing Pipeline
 
@@ -132,19 +148,26 @@ event:
 ### R9: Configuration
 
 ```yaml
-# Environment variables
-STORAGE_ENDPOINT: http://minio:9000
+# Environment variables (AWS-first defaults)
+STORAGE_BACKEND: s3
 STORAGE_BUCKET: compliance-artifacts
-STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY}
-STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY}
+AWS_REGION: us-east-1
 MEMORY_URL: http://memory-service:5000
 LLM_GATEWAY_URL: http://llm-gateway:4000    # optional
 TRIGGER_MODE: poll
 POLL_INTERVAL_SEC: 30
 WATCH_PREFIX: uploads/
-OCR_BACKEND: tesseract       # tesseract | textract | azure_di
-PDF_BACKEND: pdfplumber      # pdfplumber | pymupdf | tika
+OCR_BACKEND: textract        # textract | tesseract | azure_di
+OCR_FALLBACK: tesseract      # fallback if primary fails or quota exceeded
+PDF_BACKEND: pdfplumber      # pdfplumber | pymupdf | tika (for digital PDFs, no OCR)
 MAX_FILE_SIZE_MB: 100
 LOG_LEVEL: info
 PORT: 7000
+
+# Local development overrides:
+# STORAGE_BACKEND: minio
+# STORAGE_ENDPOINT: http://minio:9000
+# STORAGE_ACCESS_KEY: minioadmin
+# STORAGE_SECRET_KEY: minioadmin
+# OCR_BACKEND: tesseract
 ```

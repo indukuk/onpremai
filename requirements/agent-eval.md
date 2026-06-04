@@ -4,6 +4,23 @@
 
 Stateful compliance evaluation engine. Takes evidence (structured + unstructured), evaluates it against regulatory controls, generates compliance assessments with gaps and recommendations.
 
+## System Requirements Covered
+
+| System Requirement | This module's role | Requirement ID |
+|---|---|---|
+| LLM Agnostic | Declares task per graph node, zero model knowledge | R1 |
+| Storage Agnostic | All evidence I/O via StorageClient | R2 |
+| Per-Tenant Budget | Partial evaluation mode (rules-only) on credit exhaustion | R16 |
+| Graceful Degradation | Rules-only if LLM down, cached if evidence unchanged | R4, R16 |
+| PII-Aware Logging | All logs via AgentLogger, PII-free operational output | R6 |
+| Observability | Per-node timing, LLM call logs, trace_id propagation | R6 |
+| Security Isolation | Generates code, delegates to sandbox, never runs in-process | R12 |
+| Memory is Shared | Reads/writes eval history, patterns, tenant context | R4 |
+| Deterministic First | 3-layer pipeline: rules → LLM judgment → scoring formula | R10 |
+| Skills & Playbooks | Fetches prompt templates from memory service | R5 |
+| Multi-Tenant Isolation | Scoped to tenant_id in all memory/storage calls | R4 |
+| Independent Deploy | Own image, EVAL_VERSION tag | R8 |
+
 ## Current State (what exists in /Users/indukuk/compliance)
 
 - LangGraph-based graph with 12 nodes: router → discovery → confirmation → extractor → evaluation → sandbox → code_fixer → storage → query → formatter → chat_respond
@@ -152,20 +169,82 @@ router → discovery → confirmation → extractor → evaluation → sandbox �
 ### R15: Configuration
 
 ```yaml
-# Environment variables (all have defaults for local dev)
+# Environment variables (AWS-first defaults)
 LLM_GATEWAY_URL: http://llm-gateway:4000
 MEMORY_URL: http://memory-service:5000
-STORAGE_ENDPOINT: http://minio:9000
+STORAGE_BACKEND: s3                      # s3 | minio
 STORAGE_BUCKET: compliance-artifacts
-STATE_BACKEND: postgres          # postgres | dynamodb
-STATE_DSN: postgresql://user:pass@postgres:5432/compliance
+AWS_REGION: us-east-1
+STATE_BACKEND: postgres
+STATE_DSN: postgresql://compliance:${DB_PASSWORD}@${DB_HOST}:5432/compliance
 PREPROCESSOR_URL: http://preprocessor:7000
 SANDBOX_URL: http://sandbox-service:9000
 LOG_LEVEL: info
 MAX_EVAL_TIMEOUT_SEC: 300
 MAX_SANDBOX_RETRIES: 2
-RAG_INDEX_PATH: /data/rag/       # local mount or fetched from storage on startup
+RAG_INDEX_PATH: s3://compliance-artifacts/rag-kb/v2/  # S3 path, fetched on startup
 ```
+
+### R16: Credit Exhaustion — Partial Evaluation Mode
+
+When LLM gateway returns `LLMCreditExhaustedError`, agent-eval does NOT fail. It falls back to **rules-only evaluation**:
+
+#### Behavior:
+
+```python
+async def evaluate_control(request: EvalRequest) -> EvalResult:
+    # Layer 1 always runs (deterministic, zero LLM cost)
+    layer1_results = await run_rule_engine(request.evidence, request.criteria)
+    
+    needs_judgment = [c for c in layer1_results if c.status == "NEEDS_JUDGMENT"]
+    
+    if not needs_judgment:
+        # 100% deterministic — no LLM needed regardless of budget
+        return score_and_return(layer1_results, partial=False)
+    
+    try:
+        # Layer 2: attempt LLM judgment
+        layer2_results = await run_llm_judgment(needs_judgment, request)
+        return score_and_return(layer1_results + layer2_results, partial=False)
+    except LLMCreditExhaustedError as e:
+        # Mark NEEDS_JUDGMENT criteria as "insufficient_evidence" (not pass, not fail)
+        degraded_results = mark_as_insufficient(needs_judgment)
+        result = score_and_return(layer1_results + degraded_results, partial=True)
+        result.metadata.update({
+            "partial_evaluation": True,
+            "llm_skipped": True,
+            "degradation_level": e.degradation_level,
+            "criteria_resolved_by_rules": len(layer1_results) - len(needs_judgment),
+            "criteria_needing_llm": len(needs_judgment),
+            "queued_for_full_eval": e.can_queue,
+            "queue_position": e.queued_position,
+        })
+        return result
+```
+
+#### What the user sees:
+
+```json
+{
+  "control_id": "CC6.1",
+  "status": "partial_evaluation",
+  "confidence": 0.65,
+  "partial_evaluation": true,
+  "resolved_criteria": 7,
+  "pending_criteria": 3,
+  "message": "7 of 10 criteria evaluated by rules. 3 criteria require AI judgment — queued for processing when budget is available.",
+  "rule_based_score": 0.78,
+  "estimated_full_score_range": [0.70, 0.90]
+}
+```
+
+#### Scoring in partial mode:
+
+- Only deterministic criteria contribute to score
+- Score is marked as provisional — will be updated when queue drains
+- Floor rules still apply (policy FAIL still caps at 0.84)
+- Result stored in eval_history with `partial=True` flag
+- When queue drains and full evaluation completes: result is updated, user notified
 
 ---
 

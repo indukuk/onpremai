@@ -1,0 +1,14 @@
+{
+  "users": [
+    {"id": "user-001", "tenant_id": "tenant-acme-corp", "email": "ciso@acme.example.com", "name": "Sarah Chen", "role": "admin"},
+    {"id": "user-002", "tenant_id": "tenant-acme-corp", "email": "compliance@acme.example.com", "name": "Mike Johnson", "role": "compliance_manager"},
+    {"id": "user-003", "tenant_id": "tenant-acme-corp", "email": "dev-lead@acme.example.com", "name": "Priya Patel", "role": "contributor"},
+    {"id": "user-004", "tenant_id": "tenant-acme-corp", "email": "auditor@acme.example.com", "name": "James Wilson", "role": "auditor"},
+    {"id": "user-005", "tenant_id": "tenant-globex-inc", "email": "cto@globex.example.com", "name": "Diana Torres", "role": "admin"},
+    {"id": "user-006", "tenant_id": "tenant-globex-inc", "email": "compliance@globex.example.com", "name": "Robert Kim", "role": "compliance_manager"},
+    {"id": "user-007", "tenant_id": "tenant-globex-inc", "email": "engineer@globex.example.com", "name": "Aisha Okafor", "role": "contributor"},
+    {"id": "user-008", "tenant_id": "tenant-initech", "email": "owner@initech.example.com", "name": "Bill Lumbergh", "role": "admin"},
+    {"id": "user-009", "tenant_id": "tenant-initech", "email": "dev@initech.example.com", "name": "Peter Gibbons", "role": "contributor"},
+    {"id": "user-010", "tenant_id": "tenant-initech", "email": "compliance@initech.example.com", "name": "Nina Shah", "role": "compliance_manager"}
+  ]
+}

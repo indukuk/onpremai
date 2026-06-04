@@ -6,6 +6,21 @@ Autonomous improvement agent. Watches all LLM calls and agent outcomes, detects 
 
 The observer makes the system better over time without code deploys.
 
+## System Requirements Covered
+
+| System Requirement | This module's role | Requirement ID |
+|---|---|---|
+| LLM Agnostic | Uses task="complex_reasoning" for diagnosis via gateway | R3 |
+| Per-Tenant Budget | Pauses on credit exhaustion, tracks degradation events | R18 |
+| Graceful Degradation | Defers diagnosis if strong tier unavailable, resumes automatically | R18 |
+| PII-Aware Logging | Reads only aggregated metrics, never raw PII from logs | R13 |
+| Observability | Consumes all service logs for pattern detection and analysis | R1 |
+| Self-Improving | Core purpose: tunes routing, prompts, thresholds via graduated autonomy | R2-R10 |
+| Self-Governing (AI Risk) | Generates model inventory, drift detection, bias monitoring, governance reports | R16 |
+| Human-in-the-Loop | Tier 3 changes require human approval before execution | R5 |
+| Multi-Tenant Isolation | Admin scope: reads cross-tenant aggregates but never copies tenant data | R13 |
+| Independent Deploy | Own image, OBSERVER_VERSION tag | R14 |
+
 ## Core Responsibilities
 
 1. Monitor: ingest all LLM gateway logs and agent outcomes
@@ -369,3 +384,65 @@ GOVERNANCE_REPORT_MONTHLY: true
 - Does NOT run during circuit breaker cooldown
 - Does NOT exceed its budget
 - Does NOT apply changes faster than validation can confirm them
+- Does NOT run diagnosis or optimization during credit exhaustion (pauses gracefully)
+
+### R18: Credit Exhaustion Behavior
+
+When the system enters degraded mode due to credit/budget exhaustion:
+
+1. **Observer pauses all LLM-dependent jobs**: diagnosis, prompt optimization, model fitness analysis
+2. **Observer continues metric collection**: log ingestion, aggregation, detection — these are code-only, no LLM
+3. **Observer monitors budget status**: polls `GET /admin/credit-status` and `GET /admin/budget/{tenant_id}`
+4. **Observer resumes automatically**: when credits replenish and gateway reports tiers available
+5. **Observer tracks degradation events**: records when tenants enter/exit degraded mode as a metric (useful for governance reports)
+6. **Observer's own budget**: observer uses `task="complex_reasoning"` (strong tier). If strong is exhausted, observer pauses entirely — it will not produce low-quality diagnosis on a weaker model.
+
+### R19: Configuration (AWS-First)
+
+```yaml
+# Environment variables (AWS-first defaults)
+LLM_GATEWAY_URL: http://llm-gateway:4000
+LLM_GATEWAY_ADMIN_URL: http://llm-gateway:4001
+MEMORY_URL: http://memory-service:5000
+LOG_PATH: /logs
+LOG_LEVEL: info
+PORT: 6000
+AWS_REGION: us-east-1
+
+# Schedule
+SCHEDULE_QUALITY_SEC: 3600
+SCHEDULE_PROMPTS_SEC: 21600
+SCHEDULE_MODEL_FIT_SEC: 86400
+SCHEDULE_SELF_EVAL_SEC: 604800
+
+# Policy
+AUTO_APPLY_ENABLED: true
+AUTO_APPLY_MIN_CONFIDENCE: 0.80
+AUTO_APPLY_MIN_SAMPLES: 20
+CANARY_TRAFFIC_PCT: 20
+CANARY_MIN_DURATION_HOURS: 4
+CANARY_MIN_SAMPLES: 30
+CIRCUIT_BREAKER_MAX_ROLLBACKS: 3
+CIRCUIT_BREAKER_WINDOW_HOURS: 6
+CIRCUIT_BREAKER_COOLDOWN_HOURS: 12
+MAX_AUTO_APPLIES_PER_DAY: 10
+MAX_CONCURRENT_CANARIES: 3
+OBSERVER_BUDGET_PER_CYCLE_USD: 5.00
+VALIDATION_DELAY_MINUTES: 60
+
+# Model Risk Governance
+MODEL_GOVERNANCE_ENABLED: true
+DRIFT_DETECTION_WINDOW_DAYS: 7
+DRIFT_THRESHOLD_KS_PVALUE: 0.05
+BIAS_VARIANCE_THRESHOLD: 0.15
+GOVERNANCE_REPORT_WEEKLY: true
+GOVERNANCE_REPORT_MONTHLY: true
+
+# Notifications
+NOTIFY_WEBHOOK_URL: ${OBSERVER_WEBHOOK_URL:-}
+NOTIFY_ON_AUTO_APPLY: true
+NOTIFY_ON_CANARY: true
+NOTIFY_ON_ROLLBACK: true
+NOTIFY_ON_CIRCUIT_BREAK: true
+NOTIFY_ON_CREDIT_EXHAUSTION: true
+```

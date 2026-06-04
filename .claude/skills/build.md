@@ -1,54 +1,71 @@
-# Skill: Build
+---
+name: build
+description: Build Docker images for services in this compliance AI system. Use this skill when the user says "build", "docker build", "rebuild", "build images", or needs to create container images before deploying. Also use when build fails and user needs troubleshooting help.
+---
 
-## Purpose
-Build Docker images for all services in this project. Validate Dockerfiles, check image sizes, and ensure builds succeed.
+# Build
 
-## Tech Stack
-- Python 3.11 (all services)
-- FastAPI (API services)
-- Docker multi-stage builds
-- Docker Compose for orchestration
+Build Docker images for all services. Validates Dockerfiles, checks image sizes, and ensures builds succeed before deploy.
 
-## When to use
-- User says "build", "docker build", "build images", "rebuild"
-- After code changes that need new images
-- Before deploy
+## Build a Single Service
 
-## Instructions
-
-### Build a single service
 ```bash
 cd /Users/indukuk/onpremai/{service-name}
 docker build --platform linux/amd64 --provenance=false -t onpremai/{service-name}:dev .
 ```
 
-### Build all services
+## Build All Services
+
 ```bash
 docker compose build
 ```
 
-### Build with no cache (clean rebuild)
+## Build with No Cache (clean rebuild)
+
 ```bash
 docker compose build --no-cache {service-name}
 ```
 
-### Validate before build
-1. Check Dockerfile exists in service directory
-2. Check requirements.txt or pyproject.toml exists
-3. Verify no secrets in Dockerfile (no hardcoded keys, passwords, tokens)
-4. Verify .dockerignore exists (excludes .env, __pycache__, .git, .venv)
+## Pre-Build Validation
 
-### After build
-1. Report image size: `docker images onpremai/{service-name}:dev --format "{{.Size}}"`
-2. Check for vulnerabilities: `docker scout cves onpremai/{service-name}:dev` (if available)
-3. Verify health endpoint works: `docker run --rm -d --name test onpremai/{service-name}:dev && sleep 3 && curl -sf http://localhost:{port}/health && docker stop test`
+Before building, check these — a missing file means the build will fail and waste time:
 
-### Image naming convention
-- Dev: `onpremai/{service}:dev`
-- Tagged: `onpremai/{service}:{version}`
-- Services: compliance-assistant, agent-eval, llm-gateway, memory-service, observer, sandbox-service, preprocessor
+1. Dockerfile exists in service directory
+2. requirements.txt or pyproject.toml exists
+3. No secrets in Dockerfile (no hardcoded keys, passwords, tokens)
+4. .dockerignore exists (excludes .env, __pycache__, .git, .venv)
 
-### Common build issues
-- `pip install` fails → check requirements.txt for typos, version conflicts
-- Image too large → check .dockerignore, use multi-stage build, remove dev dependencies
-- Platform mismatch → always use `--platform linux/amd64`
+## Post-Build Checks
+
+```bash
+# Image size (flag if > 1GB)
+docker images onpremai/{service-name}:dev --format "{{.Size}}"
+
+# Quick health check
+docker run --rm -d -p 8099:8080 --name build-test onpremai/{service-name}:dev \
+  && sleep 3 \
+  && curl -sf http://localhost:8099/health \
+  && docker stop build-test
+
+# Vulnerability scan (if docker scout available)
+docker scout cves onpremai/{service-name}:dev 2>/dev/null
+```
+
+## Image Naming
+
+| Context | Tag |
+|---------|-----|
+| Development | `onpremai/{service}:dev` |
+| Versioned | `onpremai/{service}:{version}` |
+
+Services: compliance-assistant, agent-eval, llm-gateway, memory-service, observer, sandbox-service, preprocessor
+
+## Common Build Failures
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `pip install` fails | Version conflict or typo in requirements.txt | Check package names, pin compatible versions |
+| Image > 1GB | Missing .dockerignore, dev deps included | Add multi-stage build, exclude dev packages |
+| Platform mismatch | M1/ARM vs x86 | Always use `--platform linux/amd64` |
+| COPY fails | File path wrong or missing | Check paths relative to build context |
+| Permission denied at runtime | Running as root, volume ownership | Add `USER 65534` in Dockerfile |

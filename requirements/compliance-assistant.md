@@ -4,6 +4,22 @@
 
 **The user-facing AI for the compliance platform.** Adapts its persona to whoever logs in — program manager for the compliance lead, task coach for control owners, executive advisor for leadership, audit assistant for auditors.
 
+## System Requirements Covered
+
+| System Requirement | This module's role | Requirement ID |
+|---|---|---|
+| LLM Agnostic | Declares task per LLM call (tool_selection, chat_response, skill_execution) | R1 |
+| Per-Tenant Budget | Data-only mode on credit exhaustion (MCP tools still work) | R17 |
+| Graceful Degradation | Works without MCP (chat-only), without LLM (data-only mode) | R17 |
+| PII-Aware Logging | All logs via AgentLogger, PII-free operational output | R8 |
+| Observability | Emits tool execution logs, session metrics, trace_id propagation | R8 |
+| Shadow AI per User | Adopts persona per role, loads per-user context from memory | R0 |
+| Memory is Shared | Reads/writes user memory, sessions, interactions | R5 |
+| Skills & Playbooks | Loads role-filtered skills, executes step-by-step playbooks | R6 |
+| Human-in-the-Loop | Shows confirmation prompts for destructive MCP tool calls | R7, R14 |
+| Multi-Tenant Isolation | Passes tenant JWT, never mixes tenant data | R3 |
+| Independent Deploy | Own image, CHAT_VERSION tag | R9 |
+
 It is self-aware: "I own this organization's path to audit readiness. I know the deadline, the gaps, who's responsible for what, and what's at risk. I guide each person through their part."
 
 ## Current State (what exists in /Users/indukuk/compliance)
@@ -806,3 +822,112 @@ skill:
 
 - During evaluation (Layer 2), if LLM needs to judge unstructured evidence, the summarization output can be used as pre-processed input — reducing token usage and improving consistency
 - Evidence summaries are cached in memory (`memory.eval_store` with type="evidence_summary") and reused until evidence hash changes
+
+### R17: Credit Exhaustion — Data-Only Mode
+
+When LLM gateway returns `LLMCreditExhaustedError`, the compliance-assistant does NOT stop working. It switches to **data-only mode** where it can still serve the user using MCP tools, memory, and pre-computed data — without generating new LLM responses.
+
+#### What still works (no LLM needed):
+
+| Capability | How |
+|------------|-----|
+| Show compliance status & readiness % | MCP resource read (`tenant://frameworks/*/status`) |
+| Show tasks, overdue items, deadlines | Memory service (`task_list`, `task_summary`) |
+| Show evidence gaps | MCP tool (`evidence.check_coverage`) |
+| Send reminders / escalations | MCP tool (`escalation.send_reminder`) |
+| Upload evidence (get presigned URL) | MCP tool (`evidence.upload_url`) |
+| Show risk register | MCP tool (`risk.list`) |
+| Show audit timeline | MCP tool (`escalation.get_timeline`) |
+| Show team workload | MCP tool (`users.get_workload`) |
+| Recall user/tenant memory | Memory service (`tenant_recall`, `user_recall`) |
+
+#### What is paused (requires LLM):
+
+| Capability | Why |
+|------------|-----|
+| Natural language chat responses | Needs LLM to generate text |
+| Policy drafting | Needs LLM for generation |
+| Complex compliance Q&A | Needs RAG + LLM reasoning |
+| Evidence summarization | Needs LLM interpretation |
+| Skill execution (multi-step guidance) | Needs LLM for step reasoning |
+| Tool selection (which tool to call) | Needs LLM intent classification |
+
+#### Data-only mode behavior:
+
+```python
+async def handle_message(message: str, session: Session) -> Response:
+    try:
+        # Normal path: LLM decides what to do
+        return await llm_agent_loop(message, session)
+    except LLMCreditExhaustedError as e:
+        # Switch to data-only mode
+        session.mode = "data_only"
+        
+        # Use keyword matching (not LLM) to determine intent
+        intent = keyword_intent_match(message, session.available_tools)
+        
+        if intent:
+            # Execute tool directly based on keyword match
+            result = await execute_tool(intent.tool, intent.params, session)
+            return format_data_response(result, degradation_notice=True)
+        else:
+            # Can't determine intent without LLM — show menu
+            return data_only_menu_response(e)
+```
+
+#### What the user sees on entering data-only mode:
+
+```
+I'm currently in data-only mode — our AI analysis budget has been reached 
+for this billing period. Here's what I can still help with:
+
+📊 STATUS     — Show your compliance readiness and control status
+📋 TASKS      — View your open tasks and deadlines  
+📁 EVIDENCE   — Check evidence coverage, get upload links
+⏰ OVERDUE    — See overdue items, send reminders
+📈 RISKS      — View risk register
+🔍 AUDIT      — Check audit timeline and readiness score
+
+Type one of these keywords or ask me a specific status question.
+
+Full AI capabilities (guidance, policy drafting, evaluations) are queued 
+and will resume when the budget resets.
+Estimated resumption: {estimated_recovery}
+```
+
+#### Keyword intent matching (fallback without LLM):
+
+```python
+KEYWORD_INTENTS = {
+    "status": ("evidence.check_coverage", {"framework_id": "all"}),
+    "tasks": ("memory.task_list", {"status": "open"}),
+    "overdue": ("escalation.check_overdue", {"framework_id": "all"}),
+    "evidence": ("evidence.check_coverage", {}),
+    "upload": ("evidence.upload_url", {}),
+    "risks": ("risk.list", {}),
+    "audit": ("audit.get_readiness", {}),
+    "team": ("users.list", {}),
+    "remind": ("escalation.check_overdue", {}),  # show overdue, offer to remind
+}
+```
+
+#### Session continuity:
+
+- When credits return and queue drains, next message automatically returns to full mode
+- No manual action needed — gateway health check detects budget reset
+- Any queued evaluations process in background, user notified of results
+- Session state preserved across mode transitions
+
+### R18: Configuration (AWS-First)
+
+```yaml
+# Environment variables (AWS-first defaults)
+LLM_GATEWAY_URL: http://llm-gateway:4000
+MEMORY_URL: http://memory-service:5000
+MCP_SERVER_URL: http://backend:8080/mcp
+LOG_LEVEL: info
+MAX_TOOL_ROUNDS: 5
+SESSION_TTL_HOURS: 4
+TOOL_TIMEOUT_SEC: 10
+AWS_REGION: us-east-1
+```

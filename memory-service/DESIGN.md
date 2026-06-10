@@ -139,7 +139,56 @@ erDiagram
         text model_used
         text tier_used
         int latency_ms
+        text decision_status
         timestamptz created_at
+    }
+
+    EVALUATION_JUSTIFICATIONS {
+        uuid id PK
+        text tenant_id
+        uuid evaluation_id FK
+        jsonb justification
+        text summary
+        timestamptz created_at
+    }
+
+    EVALUATION_COMMENTS {
+        uuid id PK
+        text tenant_id
+        uuid evaluation_id FK
+        text criterion_id
+        text author_id
+        text author_role
+        text content
+        uuid parent_comment_id FK
+        timestamptz created_at
+        timestamptz updated_at
+        timestamptz deleted_at
+    }
+
+    EVALUATION_DECISIONS {
+        uuid id PK
+        uuid evaluation_id FK
+        text tenant_id
+        text control_id
+        text framework
+        text criterion_id
+        text ai_verdict
+        text user_verdict
+        text decision_type
+        text decided_by
+        text decided_by_role
+        text override_reason
+        text status
+        float ai_score
+        float final_score
+        text ai_status
+        text final_status
+        jsonb overrides
+        text notes
+        timestamptz decided_at
+        timestamptz created_at
+        timestamptz updated_at
     }
 
     PATTERNS {
@@ -192,9 +241,89 @@ erDiagram
         jsonb data
     }
 
+    POLICY_OBLIGATIONS {
+        uuid id PK
+        text tenant_id
+        text control_id
+        text framework
+        text document_name
+        text document_storage_key
+        text section_ref
+        int page_number
+        text clause_text
+        text obligation_type
+        text obligation_summary
+        jsonb specifics
+        text status
+        float confidence
+        timestamptz extracted_at
+        text reviewed_by
+        timestamptz reviewed_at
+    }
+
+    CONTROL_APPLICABILITY {
+        uuid id PK
+        text tenant_id
+        text control_id
+        text framework
+        text applicability
+        text justification
+        text scope_limitation
+        text soa_document
+        text soa_reference
+        date review_date
+        text reviewed_by
+    }
+
+    POLICY_GRAPH_NODES {
+        uuid id PK
+        text tenant_id
+        text document_id
+        text node_type
+        text label
+        jsonb properties
+        text section_ref
+        int page_number
+        text source_text
+        vector embedding
+        text community_id
+        timestamptz created_at
+    }
+
+    POLICY_GRAPH_EDGES {
+        uuid id PK
+        text tenant_id
+        uuid source_node_id FK
+        uuid target_node_id FK
+        text relationship
+        jsonb properties
+        float confidence
+        timestamptz created_at
+    }
+
+    POLICY_COMMUNITIES {
+        text id PK
+        text tenant_id
+        text topic
+        text summary
+        int node_count
+        text_arr key_obligations
+        text_arr related_controls
+        timestamptz created_at
+    }
+
     SKILLS ||--o{ SKILL_VERSIONS : "has versions"
     TASKS }o--|| TENANT_MEMORY : "scoped to tenant"
     EVAL_HISTORY }o--|| TENANT_MEMORY : "scoped to tenant"
+    EVAL_HISTORY ||--|| EVALUATION_JUSTIFICATIONS : "has justification"
+    EVAL_HISTORY ||--o{ EVALUATION_DECISIONS : "has decisions"
+    EVAL_HISTORY ||--o{ EVALUATION_COMMENTS : "has comments"
+    EVALUATION_COMMENTS ||--o{ EVALUATION_COMMENTS : "threaded replies"
+    POLICY_OBLIGATIONS }o--|| TENANT_MEMORY : "scoped to tenant"
+    CONTROL_APPLICABILITY }o--|| TENANT_MEMORY : "scoped to tenant"
+    POLICY_GRAPH_NODES ||--o{ POLICY_GRAPH_EDGES : "source"
+    POLICY_GRAPH_NODES ||--o{ POLICY_GRAPH_EDGES : "target"
+    POLICY_GRAPH_NODES }o--|| POLICY_COMMUNITIES : "belongs to"
     INTERACTIONS }o--|| USER_MEMORY : "references user"
 ```
 
@@ -253,6 +382,14 @@ graph LR
 | Tenant memory | Indefinite | Manual delete or dedup-merge |
 | Tasks | Until completed/cancelled | Status transitions, never deleted |
 | Eval history | Indefinite | Grows append-only |
+| Eval justifications | Indefinite | 1:1 with eval_history, immutable |
+| Eval decisions | Indefinite | Accept/override records, never deleted |
+| Eval comments | Indefinite | Soft-delete only (deleted_at), never hard-deleted |
+| Policy obligations | Until policy superseded | Marked "superseded" when policy re-analyzed |
+| Policy graph (nodes/edges) | Until policy re-analyzed | Full graph replaced on re-analysis |
+| Policy communities | Until graph rebuilt | Regenerated with graph |
+| Late-chunked embeddings | Until document re-processed | Replaced on re-upload |
+| Control applicability | Until SOA updated | Overwritten on SOA re-upload |
 | Patterns | Until decayed below threshold | Confidence decay if unused |
 | Skills | Versioned forever | Versions retired, never deleted |
 | Interactions | 90 days (configurable) | TTL-based batch cleanup |
@@ -508,6 +645,9 @@ graph TB
             R_TENANT[tenant-memory.ts]
             R_TASKS[tasks.ts]
             R_EVAL[eval-history.ts]
+            R_JUST[eval-justifications.ts]
+            R_DECISIONS[eval-decisions.ts]
+            R_COMMENTS[eval-comments.ts]
             R_PATTERNS[patterns.ts]
             R_SKILLS[skills.ts]
             R_INTERACTIONS[interactions.ts]
@@ -522,6 +662,9 @@ graph TB
             S_TENANT[tenant-memory.service.ts]
             S_TASKS[task.service.ts]
             S_EVAL[eval-history.service.ts]
+            S_JUST[eval-justification.service.ts]
+            S_DECISIONS[eval-decision.service.ts]
+            S_COMMENTS[eval-comment.service.ts]
             S_PATTERNS[pattern.service.ts]
             S_SKILLS[skill.service.ts]
             S_INTERACTIONS[interaction.service.ts]
@@ -572,6 +715,11 @@ src/
     tenant-memory.ts          # POST/GET/PUT/DELETE /tenant/:tenant/*
     tasks.ts                  # POST/GET/PUT /tasks/:tenant/*
     eval-history.ts           # POST/GET /eval/:tenant/:framework/:control/*
+    eval-justifications.ts    # POST/GET /evaluations/:eval_id/justification
+    eval-decisions.ts         # POST /evaluations/:eval_id/accept, /override
+    eval-comments.ts          # POST/GET /evaluations/:eval_id/comments
+    policy-obligations.ts     # POST/GET /policies/:tenant/:framework/:control/obligations
+    control-applicability.ts  # POST/GET/PUT /applicability/:tenant/:framework/:control
     patterns.ts               # POST/GET/PUT/DELETE /patterns/*
     skills.ts                 # GET/POST /skills/*
     interactions.ts           # POST/GET /interactions/:tenant/:user
@@ -584,6 +732,11 @@ src/
     tenant-memory.service.ts  # CRUD + semantic search + dedup for tenant facts
     task.service.ts           # CRUD + auto-transitions + summaries
     eval-history.service.ts   # Append + query + cache-check by evidence_hash
+    eval-justification.service.ts  # Store/retrieve justification documents (1:1 with eval)
+    eval-decision.service.ts  # Accept/override logic + audit trail + role validation
+    eval-comment.service.ts   # Threaded comments + soft delete + notification trigger
+    policy-obligation.service.ts   # Store/query/consolidate policy obligations per control
+    control-applicability.service.ts # SOA-derived applicability (excluded/applicable/partial)
     pattern.service.ts        # CRUD + semantic search + decay + boost
     skill.service.ts          # Version management + canary logic
     interaction.service.ts    # Append + retention cleanup
@@ -841,6 +994,271 @@ The `/import/{tenant_id}` endpoint accepts the same format and:
 2. Checks for ID conflicts (uses upsert semantics)
 3. Re-generates embeddings for imported facts (since vectors are model-version-dependent)
 4. Logs the entire import operation to audit trail
+
+---
+
+## Evaluation Interaction APIs
+
+These endpoints support the evaluation justification, commenting, and accept/override workflow. They operate on data produced by agent-eval and consumed by compliance-assistant (Shadow AI agents) and the frontend.
+
+### Justification Storage
+
+```
+POST /evaluations/{evaluation_id}/justification
+  body: {justification: JSONB, summary: TEXT}
+  Called by: agent-eval formatter_node (after evaluation completes)
+  Returns: 201 {id, evaluation_id}
+
+GET /evaluations/{evaluation_id}/justification
+  Called by: compliance-assistant, frontend
+  Returns: {justification, summary, created_at}
+```
+
+### Accept / Override
+
+```
+POST /evaluations/{evaluation_id}/accept
+  body: {criterion_id?: TEXT, note?: TEXT}
+  Called by: compliance-assistant (via MCP tool), frontend
+  Auth: compliance_manager, auditor, admin only
+  Returns: 201 {decision_id, decision_type: "accepted"}
+  Side-effects:
+    - Creates evaluation_decision record
+    - Updates eval_history.decision_status = "accepted"
+    - Appends to audit_trail
+
+POST /evaluations/{evaluation_id}/override
+  body: {criterion_id: TEXT, user_verdict: TEXT, reason: TEXT}
+  Called by: compliance-assistant (via MCP tool), frontend
+  Auth: auditor, compliance_manager, admin only
+  Validation: reason is REQUIRED (422 if empty)
+  Returns: 201 {decision_id, decision_type: "overridden", ai_verdict, user_verdict}
+  Side-effects:
+    - Creates evaluation_decision record (ai_verdict preserved, user_verdict stored)
+    - Updates eval_history.decision_status = "overridden"
+    - Recalculates final_score in evaluation_decisions (user's adjusted score)
+    - Appends to audit_trail
+  Invariant: eval_history.result is NEVER modified (AI result is immutable)
+```
+
+### Comments
+
+```
+POST /evaluations/{evaluation_id}/comments
+  body: {content: TEXT, criterion_id?: TEXT, parent_comment_id?: UUID}
+  Called by: any authenticated user in tenant
+  Returns: 201 {comment_id, author_id, created_at}
+  Side-effects:
+    - Creates evaluation_comment record
+    - Triggers notification to other agents tracking this control (via registry)
+
+GET /evaluations/{evaluation_id}/comments
+  Returns: [{id, criterion_id, author_id, author_role, content, parent_comment_id, created_at}]
+  Ordered by: created_at ASC (thread order)
+  Filters: ?criterion_id= to scope to specific criterion
+
+DELETE /evaluations/{evaluation_id}/comments/{comment_id}
+  Soft delete: sets deleted_at, content hidden from GET responses
+  Auth: author only, or admin
+```
+
+### Composite Fetch (for display)
+
+```
+GET /evaluations/{evaluation_id}
+  Returns combined:
+  {
+    evaluation: eval_history record,
+    justification: evaluation_justifications record,
+    decisions: [evaluation_decisions records],
+    comments: [evaluation_comments records (excluding soft-deleted)],
+    comment_count: INT
+  }
+  Called by: compliance-assistant when displaying evaluation to user
+  Optimized: single DB round-trip via JOIN or parallel queries
+```
+
+### Migration (004_evaluation_interactions.sql)
+
+```sql
+-- New table: evaluation_justifications
+CREATE TABLE evaluation_justifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id TEXT NOT NULL,
+    evaluation_id UUID NOT NULL UNIQUE,
+    justification JSONB NOT NULL,
+    summary TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    CONSTRAINT fk_eval_just FOREIGN KEY (evaluation_id) REFERENCES eval_history(id)
+);
+CREATE INDEX idx_just_eval ON evaluation_justifications(evaluation_id);
+CREATE INDEX idx_just_tenant ON evaluation_justifications(tenant_id);
+
+-- New table: evaluation_comments
+CREATE TABLE evaluation_comments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id TEXT NOT NULL,
+    evaluation_id UUID NOT NULL,
+    criterion_id TEXT,
+    author_id TEXT NOT NULL,
+    author_role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    parent_comment_id UUID,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ,
+    deleted_at TIMESTAMPTZ,
+    CONSTRAINT fk_eval_comment FOREIGN KEY (evaluation_id) REFERENCES eval_history(id),
+    CONSTRAINT fk_parent FOREIGN KEY (parent_comment_id) REFERENCES evaluation_comments(id)
+);
+CREATE INDEX idx_comments_eval ON evaluation_comments(evaluation_id, created_at);
+CREATE INDEX idx_comments_tenant ON evaluation_comments(tenant_id, evaluation_id);
+
+-- New table: evaluation_decisions (extends the concept from R7e)
+CREATE TABLE evaluation_decisions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    evaluation_id UUID NOT NULL,
+    tenant_id TEXT NOT NULL,
+    control_id TEXT NOT NULL,
+    framework TEXT NOT NULL,
+    criterion_id TEXT,
+    ai_verdict TEXT,
+    user_verdict TEXT,
+    decision_type TEXT NOT NULL DEFAULT 'pending',
+    decided_by TEXT NOT NULL,
+    decided_by_role TEXT NOT NULL,
+    override_reason TEXT,
+    status TEXT NOT NULL DEFAULT 'draft',
+    ai_score FLOAT,
+    ai_status TEXT,
+    final_score FLOAT,
+    final_status TEXT,
+    overrides JSONB DEFAULT '[]',
+    notes TEXT,
+    approved_by TEXT,
+    approved_at TIMESTAMPTZ,
+    decided_at TIMESTAMPTZ DEFAULT now(),
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    CONSTRAINT fk_eval_decision FOREIGN KEY (evaluation_id) REFERENCES eval_history(id)
+);
+CREATE INDEX idx_decisions_tenant ON evaluation_decisions(tenant_id, framework, control_id);
+CREATE INDEX idx_decisions_eval ON evaluation_decisions(evaluation_id);
+CREATE INDEX idx_decisions_status ON evaluation_decisions(tenant_id, status);
+
+-- Extend eval_history
+ALTER TABLE eval_history ADD COLUMN decision_status TEXT DEFAULT 'pending';
+```
+
+### Migration (005_policy_analysis.sql)
+
+```sql
+-- Policy obligations (extracted from policy documents, mapped to controls)
+CREATE TABLE policy_obligations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id TEXT NOT NULL,
+    control_id TEXT NOT NULL,
+    framework TEXT NOT NULL,
+    document_name TEXT NOT NULL,
+    document_storage_key TEXT NOT NULL,
+    section_ref TEXT NOT NULL,
+    page_number INT,
+    clause_text TEXT NOT NULL,
+    obligation_type TEXT NOT NULL,
+    obligation_summary TEXT NOT NULL,
+    specifics JSONB NOT NULL DEFAULT '{}',
+    status TEXT DEFAULT 'active',
+    confidence FLOAT DEFAULT 0.9,
+    extracted_at TIMESTAMPTZ DEFAULT now(),
+    reviewed_by TEXT,
+    reviewed_at TIMESTAMPTZ,
+    CONSTRAINT unique_obligation UNIQUE (tenant_id, control_id, framework, document_name, section_ref)
+);
+CREATE INDEX idx_obligations_control ON policy_obligations(tenant_id, framework, control_id);
+CREATE INDEX idx_obligations_doc ON policy_obligations(tenant_id, document_name);
+
+-- Control applicability (from Statement of Applicability)
+CREATE TABLE control_applicability (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id TEXT NOT NULL,
+    control_id TEXT NOT NULL,
+    framework TEXT NOT NULL,
+    applicability TEXT NOT NULL,
+    justification TEXT,
+    scope_limitation TEXT,
+    soa_document TEXT,
+    soa_reference TEXT,
+    review_date DATE,
+    reviewed_by TEXT,
+    CONSTRAINT unique_applicability UNIQUE (tenant_id, control_id, framework)
+);
+CREATE INDEX idx_applicability_tenant ON control_applicability(tenant_id, framework);
+```
+
+### Migration (006_policy_graph.sql)
+
+```sql
+-- Policy graph nodes (entities extracted from policy documents)
+CREATE TABLE policy_graph_nodes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id TEXT NOT NULL,
+    document_id TEXT NOT NULL,
+    node_type TEXT NOT NULL,
+    label TEXT NOT NULL,
+    properties JSONB NOT NULL DEFAULT '{}',
+    section_ref TEXT,
+    page_number INT,
+    source_text TEXT,
+    embedding vector(1024),
+    community_id TEXT,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX idx_graph_nodes_tenant ON policy_graph_nodes(tenant_id, document_id);
+CREATE INDEX idx_graph_nodes_type ON policy_graph_nodes(tenant_id, node_type);
+CREATE INDEX idx_graph_nodes_community ON policy_graph_nodes(tenant_id, community_id);
+
+-- Policy graph edges (relationships between entities)
+CREATE TABLE policy_graph_edges (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id TEXT NOT NULL,
+    source_node_id UUID NOT NULL REFERENCES policy_graph_nodes(id),
+    target_node_id UUID NOT NULL REFERENCES policy_graph_nodes(id),
+    relationship TEXT NOT NULL,
+    properties JSONB DEFAULT '{}',
+    confidence FLOAT DEFAULT 0.9,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX idx_graph_edges_source ON policy_graph_edges(source_node_id);
+CREATE INDEX idx_graph_edges_target ON policy_graph_edges(target_node_id);
+CREATE INDEX idx_graph_edges_tenant ON policy_graph_edges(tenant_id, relationship);
+
+-- Community summaries (topic clusters from community detection)
+CREATE TABLE policy_communities (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    topic TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    node_count INT,
+    key_obligations TEXT[],
+    related_controls TEXT[],
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX idx_communities_tenant ON policy_communities(tenant_id);
+
+-- Late-chunked policy embeddings (contextual embeddings for similarity fallback)
+CREATE TABLE policy_chunks_late (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id TEXT NOT NULL,
+    document_id TEXT NOT NULL,
+    section_path TEXT NOT NULL,
+    chunk_text TEXT NOT NULL,
+    start_offset INT NOT NULL,
+    end_offset INT NOT NULL,
+    embedding vector(1024),
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX idx_late_chunks_tenant ON policy_chunks_late(tenant_id, document_id);
+CREATE INDEX idx_late_chunks_vector ON policy_chunks_late USING ivfflat (embedding vector_cosine_ops);
+```
 
 ---
 

@@ -60,7 +60,7 @@ style: |
 
 # The Autonomous Compliance Workforce
 
-## Every employee gets an AI agent that does their compliance work for them
+## Every User gets an AI agent that does their compliance work for them
 
 Agents talk to each other. The system gets smarter daily.
 Deploys anywhere — including air-gapped.
@@ -69,26 +69,12 @@ Deploys anywhere — including air-gapped.
 
 # The Problem
 
-### Compliance is a $45B+ market built on human suffering
+### Compliance is a $45B+ market built on human Powered Work
 
 - **$3-5M/year** per mid-size company — still 80% manual labor
 - **Control owners** lose 5-10 hrs/month on tasks they don't understand
 - **Compliance managers** spend days chasing people, not managing compliance
 - **Most regulated industries** (defense, finance, healthcare) are locked out of modern tooling — data can't leave their network
-
----
-
-# The "AI Compliance" Tools of 2025 Don't Solve This
-
-| Platform | What They Actually Do |
-|---|---|
-| **Vanta, Drata, Secureframe** | SaaS dashboards with "AI" stickers. Users still navigate frameworks, still upload evidence, still chase colleagues. |
-| **IBM OpenPages** | $500K-$2M, 6-10 month deploys on Red Hat OpenShift. AI is bolt-on. Nobody uses it day-to-day. |
-| **All of them** | Force humans to understand compliance. Force them to use a platform. Force them to drive the process. |
-
-<br>
-
-> **The fundamental problem isn't the tooling — it's that humans are still doing the work.**
 
 ---
 
@@ -102,7 +88,7 @@ We don't give companies a better dashboard.
 
 We give every person an **AI agent that does their compliance work for them** — sends messages, collects evidence, evaluates controls, escalates issues, and coordinates with other agents.
 
-**The human never needs to understand compliance or open a platform.**
+**The Users never needs to understand how our platform works**
 
 ---
 
@@ -135,11 +121,9 @@ Agent → Mike's Agent: [coordinates automatically]
 
 Mike's Agent → Mike (Teams):
   "Sarah needs an Okta export. Takes 2 min —
-   here's how. Want me to walk you through it?"
+   here's how."
 
-Mike: pulls the export
-
-Mike's Agent → Sarah's Agent → uploads → evaluates → done.
+Mike: pulls the export → Agent uploads → evaluates → done.
 ```
 
 **Sarah never opened the compliance platform. Mike never heard "SOC 2."**
@@ -170,43 +154,17 @@ Mike's Agent → Sarah's Agent → uploads → evaluates → done.
 ### Agents don't just assist — they form an autonomous workforce
 
 ```
-  ┌──────────┐      ┌──────────────┐      ┌──────────────┐
-  │CISO Agent│◄────►│CompMgr Agent │◄────►│Owner Agents  │
-  │          │      │              │      │(Sarah, John) │
-  │"Are we   │      │"CC6.1 stuck, │      │              │
-  │ ready?"  │      │ poke Sarah"  │      │Ask others    │
-  └──────────┘      └──────┬───────┘      └───────┬──────┘
-                           │                      │
-                    ┌──────▼───────┐      ┌──────▼───────┐
-                    │Auditor Agent │      │IT/HR/Dev     │
-                    │              │      │Agents        │
-                    │Requests test │      │Pull data,    │
-                    │evidence from │      │respond to    │
-                    │all at once   │      │requests      │
-                    └──────────────┘      └──────────────┘
+  [CISO Agent] ◄──► [CompMgr Agent] ◄──► [Owner Agents (Sarah, John)]
+                           │                         │
+                    [Auditor Agent]          [IT/HR/Dev Agents]
 ```
 
 Every arrow = **agent-to-agent communication**
 Humans just approve and answer the occasional question.
 
----
-
-# Network Effects Within Each Customer
-
-<br>
-
-### More agents = faster compliance = higher switching cost
-
 - **5 agents**: basic coordination, some automated evidence flow
 - **20 agents**: compliance program runs semi-autonomously
 - **50+ agents**: full autonomous workforce, humans manage by exception
-
-<br>
-
-### After 6 months:
-- 20+ agents with deep personalized context
-- Learned preferences not exportable to a competitor
-- The system knows "Mike responds faster on Slack, Sarah prefers morning pings"
 
 ---
 
@@ -227,26 +185,6 @@ Humans just approve and answer the occasional question.
 Layer 2 asks specific questions with rubrics, not "evaluate this entire control"
 
 Layer 3 always produces the same score given same inputs. Always.
-
----
-
-# Layer 1 Example
-
-### "Do terminated employees still have access?"
-
-```
-Rule type: cross_reference
-
-Input:  terminations.csv × active_users.csv
-Check:  any terminated employee in active access list?
-Result: 0 matches → PASS (instant, free, 100% reproducible)
-        matches found → FAIL (with exact names)
-```
-
-### No LLM needed. No token cost. No variability.
-
-8 rule types: `file_existence`, `freshness`, `schema_presence`,
-`row_count`, `null_rate`, `cross_reference`, `quantitative`, `keyword_presence`
 
 ---
 
@@ -278,7 +216,6 @@ Result: 0 matches → PASS (instant, free, 100% reproducible)
 | Confidence trending ↓ | Prompt degrading | Rewrite via canary test |
 | Parse failures >15% | Output format drift | Adjust constraints |
 | Score variance >15% | Potential bias | Alert + investigation |
-| Health check failing | Provider issue | Automatic failover |
 
 <br>
 
@@ -330,7 +267,7 @@ The system improves aggressively but fails safely.
 
 | Cloud-Only | Hybrid | Air-Gapped |
 |:---:|:---:|:---:|
-| All LLMs via API | Local eval, cloud for complex | Everything on-prem |
+| All LLMs deployed on AWS | Local eval, cloud for complex | Everything on-prem |
 | Fastest to start | Best of both | Total data control |
 
 <br>
@@ -340,224 +277,131 @@ The system improves aggressively but fails safely.
 ```bash
 # Air-gapped deployment:
 tar xzf compliance-v1.5.0-offline.tar.gz && ./install.sh
-# Running in under 1 hour. Zero data leaves the building.
+# Zero data leaves the building.
 ```
 
-vs. IBM OpenPages: 6-10 months on Red Hat OpenShift
-
 ---
 
-# Who Needs Air-Gapped (And Will Pay Premium)
+# On-Premises Infrastructure Requirements
+
+### Application Tier (CPU-only VMs)
+
+| VM | Spec | Role | Est. Cost/mo |
+|---|---|---|:---:|
+| **App VM 1** | 8 vCPU, 32 GB RAM, 200 GB SSD | All 8 services (Docker Compose) | ~$300 |
+| **App VM 2** | 8 vCPU, 32 GB RAM, 200 GB SSD | HA replica / horizontal scale | ~$300 |
+| **DB VM** | 8 vCPU, 64 GB RAM, 1 TB NVMe | PostgreSQL + pgvector, Redis, MinIO | ~$500 |
+
+### LLM Tier (GPU VMs) — separate from app tier
+
+| VM | Spec | Models Hosted | Est. Cost/mo |
+|---|---|---|:---:|
+| **LLM Strong** | 4× A100 80GB (or 2× H100) | DeepSeek-V3 / Qwen-72B (1M context) | ~$8,000-12,000 |
+| **LLM Mid** | 1× A100 80GB (or 2× A6000) | Mistral-22B / Qwen-32B | ~$2,500-4,000 |
+| **LLM Fast** | 1× A10 24GB (or RTX 4090) | Phi-3 / Qwen-7B / Llama-8B | ~$500-1,000 |
 
 <br>
 
-- **Defense contractors** — ITAR, CMMC
-- **Government agencies** — FedRAMP High, IL4+
-- **Critical infrastructure** — NERC CIP
-- **Banking under EU DORA** — data sovereignty mandates
-- **Healthcare with PHI** — can't risk cloud exposure
-- **Any jurisdiction with data sovereignty laws**
+### Why multiple LLMs?
 
-<br>
+- **Strong (1M context):** Complex policy analysis, long document reasoning, multi-evidence synthesis
+- **Mid:** Standard evaluations, evidence review, agent coordination
+- **Fast:** Classification, routing, simple checks (60-70% of all calls) — rules handle the rest free
 
-### These buyers have money AND compliance obligations — but zero options from Vanta, Drata, or Secureframe.
+**Total on-prem footprint: 5-6 VMs, ~$12K-18K/mo** (vs. $50K-100K/yr SaaS + data sovereignty risk)
 
 ---
 
-<!-- _backgroundColor: #16213e -->
-
-# Competitive Landscape
+# Architecture: AWS Deployment
 
 ```
-                ↑ AI Sophistication
-
-                │  ★ US (autonomous multi-agent workforce,
-                │       self-tuning, self-governing)
-                │
-                │       RegScale (on-prem AI, early)
-                │
-                │    IBM OpenPages (bolt-on BYOM, massive infra)
-                │
-                │  Vanta/Drata/Scytale ("agentic" branding)
-                │
-                │  Hyperproof (FedRAMP, rule-based)
-                │
-                │  Eramba (self-hosted, nascent LLM)
-                │
-                └────────────────────────────────────────→
-              SaaS-only        Hybrid        Air-gapped
+  EXTERNAL INTEGRATIONS                     AWS CLOUD
+ ┌────────────────────┐   ┌──────────────────────────────────────────────┐
+ │                    │   │                                              │
+ │ ┌──────────────┐  │   │  ┌─────────────────────────────────────┐    │
+ │ │ IDENTITY     │  │   │  │  ECS Fargate (private subnets)       │    │
+ │ │              │  │   │  │                                      │    │
+ │ │ Azure AD ────┼──┼──►│  │  llm-gateway ─► Bedrock (LLMs)      │    │
+ │ │ Okta    ────┼──┼──►│  │  agent-eval    compliance-assistant  │    │
+ │ │ SAML/OIDC   │  │   │  │  memory-svc    observer              │    │
+ │ └──────────────┘  │   │  │  preprocessor  sandbox-svc           │    │
+ │                    │   │  └──────────┬──────────────────────────┘    │
+ │ ┌──────────────┐  │   │             │                               │
+ │ │ COMMS        │  │   │  ┌──────────▼──────────────────────────┐    │
+ │ │              │  │   │  │  MANAGED SERVICES                    │    │
+ │ │ Slack   ◄───┼──┼───│  │  Cognito (federated IdP)             │    │
+ │ │ Teams   ◄───┼──┼───│  │  RDS Postgres + pgvector             │    │
+ │ │ Email/SES   │  │   │  │  S3 (evidence artifacts)             │    │
+ │ └──────────────┘  │   │  │  ElastiCache Redis                   │    │
+ │                    │   │  │  Secrets Manager (HMAC, API keys)    │    │
+ │ ┌──────────────┐  │   │  │  Cloud Map (service discovery)       │    │
+ │ │ CUSTOMER APPS│  │   │  │  VPC + ALB + PrivateLink + VPN       │    │
+ │ │              │  │   │  │  Bedrock LLM and Agents              │    │
+ │ │ Jira     ◄──┼──┼───│  └──────────────────────────────────────┘    │
+ │ │ ServiceNow◄─┼──┼───│                                              │
+ │ │ Splunk   ◄──┼──┼───│                                              │
+ │ │ Workday  ◄──┼──┼───│                                              │
+ │ └──────────────┘  │   │                                              │
+ │                    │   │                                              │
+ │ ┌──────────────┐  │   │                                              │
+ │ │ FILE STORAGE │  │   │                                              │
+ │ │              │  │   │                                              │
+ │ │ SharePoint◄──┼──┼───│                                              │
+ │ │ Google Drv◄──┼──┼───│                                              │
+ │ │ Box/Dropbox  │  │   │                                              │
+ │ │ Confluence◄──┼──┼───│                                              │
+ │ └──────────────┘  │   │                                              │
+ └────────────────────┘   └──────────────────────────────────────────────┘
 ```
 
-**We're top-right. Alone.**
-
 ---
 
-# Head-to-Head Comparison
-
-| Capability | Vanta/Drata | IBM OpenPages | **Us** |
-|---|:---:|:---:|:---:|
-| Per-user AI agent | No | No | **Yes** |
-| Agents talk to each other | No | No | **Yes** |
-| Agent acts on user's behalf | No | No | **Yes** |
-| Zero platform knowledge needed | No | No | **Yes** |
-| Self-tuning AI | No | No | **Yes** |
-| Self-governing AI | No | No | **Yes** |
-| Air-gapped deployment | No | Theoretically | **Yes** |
-| 97%+ reproducibility | Unknown | Unknown | **Yes** |
-| Sub-1-hour deployment | No | No (6-10 months) | **Yes** |
-| 7 LLM providers | No | No (watsonx) | **Yes** |
-| Transparent evaluation | No | No | **Yes** |
-
----
-
-# Three Market Wedges
-
-### Wedge 1: Regulated Mid-Market (Beachhead)
-500-5,000 employees in finance, healthcare, defense
-*"Compliance on autopilot, data never leaves your building"*
-**$100-250K ARR**
-
-### Wedge 2: Compliance-Fatigued Tech
-200-2,000 employees, frustrated with Vanta/Drata engagement
-*"Your engineers never open the compliance tool again"*
-**$50-150K ARR**
-
-### Wedge 3: Enterprise GRC Modernization
-5,000+ on IBM/SAP/ServiceNow — massive shelfware
-*"Add an AI workforce on top — people actually engage"*
-**$200-500K ARR**
-
----
-
-# Business Model
-
-### Per-agent pricing + deployment license
-
-| Model | Pricing | Gross Margin |
-|---|---|:---:|
-| **Cloud (SaaS)** | $/user/month | ~85% |
-| **Hybrid** | License + per-agent fee | ~75% |
-| **Air-gapped** | Annual license + support | ~70% |
-
-<br>
-
-**Expansion within accounts:**
-5 agents → 50 agents → 200+ agents (whole org)
-+ Additional frameworks (SOC 2 → ISO 27001 → HIPAA → CMMC)
-
-**Unit economics improve with scale** — self-tuning reduces ops cost, local LLMs = zero marginal cost, hash caching = repeat evals free
-
----
-
-# Technology Architecture
+# Architecture: Fully On-Premises (Air-Gapped)
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│ SHADOW AI AGENTS (one per user)                          │
-│ [CISO] ◄► [CompMgr] ◄► [Sarah] ◄► [Mike] ◄► [Auditor] │
-├─────────────────────────────────────────────────────────┤
-│ AI SERVICES                                              │
-│ agent-eval │ llm-gateway │ observer                      │
-│ memory-svc │ preprocessor │ sandbox-svc                  │
-├─────────────────────────────────────────────────────────┤
-│ INFRASTRUCTURE (customer's environment)                  │
-│ PostgreSQL+pgvector │ Redis │ MinIO │ Ollama/vLLM        │
-└─────────────────────────────────────────────────────────┘
+ ┌─────────────────────────────────────────────────────────────────────────┐
+ │  CUSTOMER DATA CENTER — nothing leaves this boundary                     │
+ │                                                                          │
+ │  ┌──────────────────┐   ┌──────────────────────────────────────────┐    │
+ │  │ IDENTITY         │   │  Docker Compose / K8s (app tier)          │    │
+ │  │                  │   │                                           │    │
+ │  │ Active Directory─┼──►│  llm-gateway ──► Ollama / vLLM (GPU)     │    │
+ │  │ LDAP            ─┼──►│  agent-eval     compliance-assistant     │    │
+ │  │ Keycloak (OIDC) ─┼──►│  memory-svc     observer                 │    │
+ │  │                  │   │  preprocessor   sandbox-svc               │    │
+ │  └──────────────────┘   └──────────┬───────────────────────────────┘    │
+ │                                     │                                    │
+ │  ┌──────────────────┐   ┌──────────▼───────────────────────────────┐    │
+ │  │ COMMS (internal) │   │  SELF-HOSTED INFRA                        │    │
+ │  │                  │   │                                           │    │
+ │  │ Teams (on-prem)◄─┼───│  PostgreSQL + pgvector                    │    │
+ │  │ SMTP relay    ◄──┼───│  MinIO (S3-compatible)                    │    │
+ │  │ Mattermost   ◄───┼───│  Redis                                    │    │
+ │  │ Cisco Webex  ◄───┼───│  Tesseract (OCR)                          │    │
+ │  └──────────────────┘   │  HashiCorp Vault (secrets)                │    │
+ │                          │  Internal DNS (service discovery)         │    │
+ │  ┌──────────────────┐   └──────────────────────────────────────────┘    │
+ │  │ CUSTOMER APPS    │                                                    │
+ │  │                  │   ┌──────────────────────────────────────────┐    │
+ │  │ Jira Server   ◄──┼───│  NETWORK                                  │    │
+ │  │ ServiceNow   ◄───┼───│                                           │    │
+ │  │ Archer/RSA   ◄───┼───│  Reverse proxy (nginx/HAProxy)            │    │
+ │  │ SAP GRC      ◄───┼───│  Internal firewall (no egress)            │    │
+ │  │ Workday HCM  ◄───┼───│  mTLS between services                    │    │
+ │  └──────────────────┘   │  Air-gap: no internet, no cloud calls     │    │
+ │                          └──────────────────────────────────────────┘    │
+ │  ┌──────────────────┐                                                    │
+ │  │ FILE STORAGE     │   Install: tar xzf release.tar.gz && ./install.sh │
+ │  │                  │   Update:  sneakernet USB or internal mirror       │
+ │  │ NFS / CIFS    ◄──┼───────────────────────────────────────────────     │
+ │  │ SharePoint   ◄───┼───────────────────────────────────────────────     │
+ │  │ Documentum   ◄───┼───────────────────────────────────────────────     │
+ │  │ Network drives   │                                                    │
+ │  └──────────────────┘                                                    │
+ └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-8 services. Independently deployable. One `docker compose up -d`.
-
----
-
-# Five Moats
-
-<br>
-
-| # | Moat | Why It's Hard to Replicate |
-|:---:|---|---|
-| 1 | **Architecture** | Multi-agent + observer + 3-layer = 18-24mo to build |
-| 2 | **Personalization** | 20+ agents with learned context per customer, not exportable |
-| 3 | **Self-Improvement** | Year 1 system outperforms Day 1 on same hardware |
-| 4 | **Regulatory** | Self-governance = table stakes under EU AI Act (we're first) |
-| 5 | **Deployment** | Once in an air-gapped org, you're in for 3-5 years minimum |
-
----
-
-# Market Opportunity
-
-<br>
-
-| | Size | Description |
-|---|:---:|---|
-| **TAM** | $45B+ | Global GRC software market |
-| **SAM** | $18B | Orgs needing AI compliance automation |
-| **SOM** | $12B | Can't use SaaS-only OR frustrated with engagement |
-
-<br>
-
-**Tailwinds:**
-- EU AI Act (2025-2026) — mandates AI governance we handle natively
-- DORA — pushing EU banks away from SaaS
-- CMMC 2.0 — 300K+ defense companies need compliance automation
-- 15+ US state privacy laws and growing
-
----
-
-# Go-to-Market
-
-<br>
-
-### Phase 1 (Mo 1-6): Design Partners
-3-5 regulated mid-market. Prove 70%+ effort reduction.
-*Success metric: control owners never open the platform.*
-
-### Phase 2 (Mo 6-12): First Revenue
-Convert partners. SOC 2 + ISO 27001 + HIPAA built-in.
-*Goal: $500K ARR from 5-10 customers.*
-
-### Phase 3 (Mo 12-24): Scale
-Channel partnerships. Enterprise sales. Framework expansion.
-*Goal: $3-5M ARR, 30-50 customers.*
-
----
-
-# Traction & Current State
-
-### Architecture complete. Implementation starting.
-
-**Done:**
-- Full 8-service architecture designed with detailed specs
-- 3-layer evaluation pipeline validated on real compliance data
-- LangGraph engine running (12 nodes, production-proven)
-- Skills/playbooks system designed
-- RAG v2 with cross-framework mappings
-
-**Needed for MVP:**
-- common/ library, LLM Gateway, Memory Service
-- Refactor existing engine to new abstractions
-- Inter-agent communication layer
-- Docker Compose deployment + first design partner
-
-**Timeline: 6 months to first deployment.**
-
----
-
-# The Ask
-
-### $[X]M Seed
-
-| Allocation | Purpose |
-|---|---|
-| **50% Engineering** | 2 ML/AI + 2 backend + 1 frontend |
-| **20% Domain** | 1 compliance expert + 1 security/infra |
-| **15% GTM** | 1 enterprise sales + design partner acquisition |
-| **15% Ops** | Infrastructure, legal, LLM costs |
-
-**Milestones:**
-- Month 3: MVP running on Docker Compose
-- Month 6: First design partner deployed
-- Month 9: Multi-agent coordination live, 3-5 paying
-- Month 12: Observer operational, $500K ARR run rate
+**Same 8 services. Same code. Zero data exfiltration risk.**
 
 ---
 
@@ -582,51 +426,3 @@ AI agents do compliance work. Humans approve and course-correct.
 Nobody learns a tool. Nobody navigates a dashboard.
 Nobody reads a framework document. The agent handles all of it —
 and gets better at it every single day.
-
----
-
-<!-- _backgroundColor: #16213e -->
-
-# Appendix A: Why Competitors Can't Replicate This
-
-<br>
-
-**The 3-Layer Pipeline Problem**
-Building deterministic rules needs deep compliance domain expertise. Combining with bounded LLM judgment is architectural — hard to retrofit onto pure-LLM systems.
-
-**The Observer Problem**
-Self-tuning needs structured logs, admin API, canary infra, graduated autonomy, circuit breakers, rollback. 6+ months even knowing the design. Must be built in from start.
-
-**The Multi-Agent Problem**
-Needs per-user memory, inter-agent messaging, skill execution, persona system, channel integration. Can't bolt onto a SaaS dashboard architecture.
-
-**The Air-Gapped Problem**
-Needs local LLM support, offline packaging, zero-cloud-dependency. SaaS competitors would rebuild everything.
-
----
-
-# Appendix B: Key Metrics
-
-| Metric | Target |
-|---|---|
-| Tasks completed without platform access | >80% at 6 months |
-| Time: assigned → evidence submitted | 70% reduction |
-| Evaluation reproducibility | >97% |
-| Observer improvements/month | 5-10 validated |
-| Agent-to-agent messages/cycle | Growing MoM |
-| Cost per evaluation vs. pure-LLM | 60-70% lower |
-| Control owner NPS | >50 (vs. industry ~10) |
-| Annual retention | >95% |
-
----
-
-# Appendix C: Risk & Mitigation
-
-| Risk | Mitigation |
-|---|---|
-| Local LLM quality | 60-70% doesn't need LLM; hybrid mode for complex |
-| Competitors add on-prem | 18-24mo head start; SaaS-first can't easily go on-prem |
-| Regulatory changes | Self-governing adapts; regulatory skill auto-detects |
-| AI trust concerns | Always DRAFT until human approves; full audit trail |
-| Multi-agent complexity | Skills keep agents bounded; approval for destructive ops |
-| Long enterprise sales | Design partners first; air-gapped = fewer vendor options |

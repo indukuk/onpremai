@@ -125,33 +125,20 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    subgraph Ingestion["Policy Ingestion"]
-        PDF["Policy PDF"] --> PP["Preprocessor"]
-        PP --> CHUNK["Late Chunking +\nEmbeddings"]
-        PP --> GRAPH["Graph Extraction"]
-        CHUNK --> STORE[("pgvector")]
-        GRAPH --> LEIDEN["Community\nDetection"] --> STORE
-    end
+    PDF["Policy PDF"] --> PP["Preprocessor"]
+    PP --> EMB["Embeddings\n+ Graph"] --> PG[("pgvector")]
 
-    subgraph Retrieval["Evaluation-Time Retrieval"]
-        QUERY["Query: CC6.1\nrequirements"] --> VEC["Vector Search"]
-        QUERY --> GW["Graph Walk"]
-        QUERY --> COM["Community\nContext"]
-        VEC --> MERGE["Merge + Rank"]
-        GW --> MERGE
-        COM --> MERGE
-        MERGE --> CRITERIA["Testing Criteria\nwith weights"]
-    end
+    PG --> VS["Vector Search"]
+    PG --> GW["Graph Walk"]
 
-    subgraph Eval["Feeds Evaluation"]
-        CRITERIA --> PROS2["Prosecutor"]
-        CRITERIA --> DEF2["Defender"]
-        CRITERIA --> RULES2["Rule Engine"]
-    end
+    VS --> TC["Testing Criteria"]
+    GW --> TC
 
-    style Ingestion fill:#1a2a3a,stroke:#4f8ff7,color:#e6edf3
-    style Retrieval fill:#1a3a1a,stroke:#3fb950,color:#e6edf3
-    style Eval fill:#3a2a00,stroke:#d29922,color:#e6edf3
+    TC --> RULES["Rule Engine"]
+    TC --> TRIB["Tribunal"]
+
+    style PG fill:#1a3a1a,stroke:#3fb950,color:#e6edf3
+    style TC fill:#3a2a00,stroke:#d29922,color:#e6edf3
 ```
 
 ---
@@ -159,44 +146,18 @@ flowchart LR
 ## 5. Full Evaluation Flow — RAG + Tribunal Combined
 
 ```mermaid
-flowchart TD
-    START(["Evaluate CC6.1"]) --> RAG
+flowchart LR
+    A(["Evaluate CC6.1"]) --> B["RAG\n11 Criteria"]
+    B --> C["Layer 1: Rules\n8 resolved"]
+    B --> D["Layer 2: Tribunal\n3 judged"]
+    C --> E["Layer 3: Score"]
+    D --> E
+    E --> F["92% Compliant"]
 
-    subgraph RAG["RAG Retrieval"]
-        direction LR
-        R1["Policy Graph"] --> R3["11 Testing Criteria\nwith weights"]
-        R2["Vector Search"] --> R3
-    end
-
-    RAG --> RULES
-
-    subgraph RULES["Layer 1: Deterministic Rules"]
-        direction LR
-        RESOLVED["8 criteria resolved\nPASS/FAIL"] 
-        UNRESOLVED["3 criteria\nNEEDS JUDGMENT"]
-    end
-
-    RESOLVED --> SCORE
-    UNRESOLVED --> TRIBUNAL
-
-    subgraph TRIBUNAL["Layer 2: Adversarial Tribunal"]
-        direction LR
-        P["Prosecutor"] --> J["Judge"]
-        D["Defender"] --> J
-    end
-
-    TRIBUNAL --> SCORE
-
-    subgraph SCORE["Layer 3: Deterministic Scoring"]
-        CALC["Weighted sum + Floor rules"]
-        RESULT["92% — Compliant"]
-        CALC --> RESULT
-    end
-
-    style RAG fill:#1a3a1a,stroke:#3fb950,color:#e6edf3
-    style RULES fill:#1a2a3a,stroke:#4f8ff7,color:#e6edf3
-    style TRIBUNAL fill:#3a2a00,stroke:#d29922,color:#e6edf3
-    style SCORE fill:#2a1a2a,stroke:#a371f7,color:#e6edf3
+    style B fill:#1a3a1a,stroke:#3fb950,color:#e6edf3
+    style C fill:#1a2a3a,stroke:#4f8ff7,color:#e6edf3
+    style D fill:#3a2a00,stroke:#d29922,color:#e6edf3
+    style E fill:#2a1a2a,stroke:#a371f7,color:#e6edf3
 ```
 
 ---

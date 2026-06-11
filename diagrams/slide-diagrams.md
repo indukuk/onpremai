@@ -96,61 +96,28 @@ sequenceDiagram
 ## 3. Adversarial Tribunal — Reducing Hallucinations
 
 ```mermaid
-flowchart TB
-    subgraph Input["Evidence + Context"]
-        EV[📄 Evidence Files<br/>CSVs, PDFs, Logs]
-        RAG[📚 RAG: Policy Graph<br/>+ Testing Criteria]
-        CTX[🧠 Tenant Memory<br/>Prior Evaluations]
+flowchart LR
+    EV[Evidence +<br/>RAG Criteria] --> PROS
+
+    subgraph Tribunal["Adversarial Tribunal"]
+        direction LR
+        PROS[🗡️ Prosecutor<br/>Argues FAIL] --> JUDGE[⚖️ Judge<br/>Weighs both]
+        DEF[🛡️ Defender<br/>Argues PASS] --> JUDGE
     end
 
-    subgraph Layer1["Layer 1: Deterministic Rules (Zero LLM)"]
-        RULES[Rule Engine<br/>8 check types]
-        R1[file_existence ✓]
-        R2[freshness ✓]
-        R3[row_count ✓]
-        R4[null_rate ✓]
-        R5[schema_presence ✓]
-        RULES --> R1 & R2 & R3 & R4 & R5
-    end
+    JUDGE -->|"Confidence ≥ 70%"| VERDICT[Verdict +<br/>Cited Reasoning]
+    JUDGE -->|"Confidence < 70%"| RETRY[Second Tribunal<br/>Different Framing]
+    RETRY -->|"Still disagree"| HUMAN[Flag for<br/>Human Review]
 
-    subgraph Layer2["Layer 2: Adversarial Tribunal (LLM)"]
-        direction TB
-        PROS[🗡️ PROSECUTOR<br/>Find ALL reasons<br/>evidence FAILS]
-        DEF[🛡️ DEFENDER<br/>Find ALL reasons<br/>evidence PASSES]
-        JUDGE[⚖️ JUDGE<br/>Weigh both sides<br/>Verdict + Justification]
+    EV --> DEF
 
-        PROS --> JUDGE
-        DEF --> JUDGE
-    end
-
-    subgraph AntiHallucination["Anti-Hallucination Safeguards"]
-        G1[Each role sees ONLY<br/>evidence + criteria — no<br/>access to other's arguments<br/>until Judge phase]
-        G2[Judge must cite<br/>which prosecution points<br/>accepted/rejected with<br/>evidence references]
-        G3[Confidence < 70%<br/>→ Second tribunal with<br/>different framing]
-        G4[Both disagree<br/>→ Flag for human review<br/>NEVER guess]
-    end
-
-    subgraph Layer3["Layer 3: Deterministic Scoring"]
-        SCORE[Weighted Formula<br/>+ Floor Rules]
-        OUT[Final: 92% Compliant]
-    end
-
-    EV --> RULES
-    RAG --> RULES
-    RAG --> PROS & DEF
-    CTX --> PROS & DEF
-
-    RULES -->|"60-70% resolved<br/>ZERO hallucination risk"| Layer3
-    RULES -->|"Only unresolved<br/>criteria"| Layer2
-
-    JUDGE --> Layer3
-    Layer3 --> OUT
-
-    style Layer1 fill:#1a3a1a,stroke:#3fb950,color:#e6edf3
-    style Layer2 fill:#3a2a00,stroke:#d29922,color:#e6edf3
-    style Layer3 fill:#1a2a3a,stroke:#4f8ff7,color:#e6edf3
-    style AntiHallucination fill:#2a1a2a,stroke:#a371f7,color:#e6edf3
+    style Tribunal fill:#3a2a00,stroke:#d29922,color:#e6edf3
 ```
+
+**Key anti-hallucination rules:**
+- Prosecutor and Defender work **independently** — neither sees the other's arguments
+- Judge must **cite specific evidence** for every point accepted or rejected
+- Low confidence → automatic retry; persistent disagreement → human escalation, never a guess
 
 ---
 

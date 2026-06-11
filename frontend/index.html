@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OnPrem AI — Compliance Platform</title>
+  <link rel="stylesheet" href="css/variables.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/tasks.css">
+  <link rel="stylesheet" href="css/panel.css">
+  <link rel="stylesheet" href="css/chat-bar.css">
+  <link rel="stylesheet" href="css/evaluation.css">
+  <link rel="stylesheet" href="css/workflows.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Topbar -->
+    <nav class="topbar">
+      <div class="topbar-left">
+        <span class="logo">OnPrem<span class="logo-ai">AI</span></span>
+        <span class="nav-divider"></span>
+        <a href="#/dashboard" class="nav-link active" data-page="dashboard">Dashboard</a>
+        <a href="#/controls" class="nav-link" data-page="controls">Controls</a>
+        <a href="#/policies" class="nav-link" data-page="policies">Policies</a>
+        <a href="#/evidence" class="nav-link" data-page="evidence">Evidence</a>
+      </div>
+      <div class="topbar-right">
+        <span class="user-badge" id="user-badge"></span>
+      </div>
+    </nav>
+
+    <!-- Main workspace: content + optional right panel -->
+    <div class="workspace" id="workspace">
+      <main id="page-content" class="page-content"></main>
+    </div>
+
+    <!-- Bottom chat section -->
+    <div class="chat-section" id="chat-section">
+      <!-- Status bar (always visible) -->
+      <div class="chat-statusbar">
+        <div class="chat-statusbar-left">
+          <button class="chat-menu-btn" id="chat-menu-btn" title="Tasks">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+              <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+            </svg>
+            <span class="chat-menu-badge" id="chat-menu-badge">5</span>
+          </button>
+          <span class="chat-statusbar-title">Shadow AI</span>
+        </div>
+        <div class="chat-statusbar-right">
+          <span class="chat-statusbar-status" id="chat-status">Ready</span>
+          <button class="chat-minimize-btn" id="chat-minimize-btn" title="Minimize (Esc)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Tasks panel (toggled by four-squares button) -->
+      <div class="chat-tasks" id="chat-tasks" hidden>
+        <div class="chat-tasks-header">
+          <div class="chat-tasks-filters">
+            <button class="task-filter active" data-filter="all">All</button>
+            <button class="task-filter" data-filter="overdue">Overdue</button>
+            <button class="task-filter" data-filter="evaluation">Evals</button>
+            <button class="task-filter" data-filter="evidence">Evidence</button>
+          </div>
+        </div>
+        <div class="chat-tasks-cards" id="chat-tasks-cards"></div>
+      </div>
+
+      <!-- Messages (expanded area) -->
+      <div class="chat-messages-area" id="chat-messages-area" hidden>
+        <div class="chat-messages" id="chat-bar-messages"></div>
+
+        <!-- Pending confirmation -->
+        <div class="chat-bar-confirmation" id="chat-bar-confirmation" hidden>
+          <p class="confirmation-text" id="confirmation-text"></p>
+          <div class="confirmation-actions">
+            <button class="btn btn-primary btn-sm" id="confirm-yes">Approve</button>
+            <button class="btn btn-ghost btn-sm" id="confirm-no">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Input row (always visible) -->
+      <div class="chat-input-row">
+        <div class="chat-input-wrapper">
+          <input type="text" class="chat-input" id="chat-bar-input" placeholder="Ask anything about compliance..." autocomplete="off">
+          <button class="chat-send-btn" id="chat-bar-send" disabled>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/router.js"></script>
+  <script src="js/panel.js"></script>
+  <script src="js/tasks.js"></script>
+  <script src="js/chat.js"></script>
+  <script src="js/evaluation.js"></script>
+  <script src="js/workflows.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

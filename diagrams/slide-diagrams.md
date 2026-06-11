@@ -5,9 +5,9 @@
 ```mermaid
 flowchart LR
     subgraph Users["User Layer"]
-        U1[👤 Compliance Manager]
-        U2[👤 Contributor]
-        U3[👤 Auditor]
+        U1["Compliance Manager"]
+        U2["Contributor"]
+        U3["Auditor"]
     end
 
     subgraph Agents["Shadow AI Agents"]
@@ -97,17 +97,17 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    EV[Evidence +<br/>RAG Criteria] --> PROS
+    EV["Evidence +\nRAG Criteria"] --> PROS
 
     subgraph Tribunal["Adversarial Tribunal"]
         direction LR
-        PROS[🗡️ Prosecutor<br/>Argues FAIL] --> JUDGE[⚖️ Judge<br/>Weighs both]
-        DEF[🛡️ Defender<br/>Argues PASS] --> JUDGE
+        PROS["Prosecutor\nArgues FAIL"] --> JUDGE["Judge\nWeighs both"]
+        DEF["Defender\nArgues PASS"] --> JUDGE
     end
 
-    JUDGE -->|"Confidence ≥ 70%"| VERDICT[Verdict +<br/>Cited Reasoning]
-    JUDGE -->|"Confidence < 70%"| RETRY[Second Tribunal<br/>Different Framing]
-    RETRY -->|"Still disagree"| HUMAN[Flag for<br/>Human Review]
+    JUDGE -->|"Confidence >= 70%"| VERDICT["Verdict +\nCited Reasoning"]
+    JUDGE -->|"Confidence < 70%"| RETRY["Second Tribunal\nDifferent Framing"]
+    RETRY -->|"Still disagree"| HUMAN["Flag for\nHuman Review"]
 
     EV --> DEF
 
@@ -125,36 +125,28 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    subgraph Ingestion["Policy Ingestion (One-time)"]
-        PDF[📄 Policy PDF<br/>87 pages]
-        PP[Preprocessor<br/>Structural Parse]
-        CHUNK[Late Chunking<br/>+ Embeddings]
-        GRAPH[Graph Extraction<br/>Entity + Relationship]
-        LEIDEN[Community Detection<br/>Leiden Algorithm]
-        STORE[(pgvector<br/>Embeddings + Graph)]
-
-        PDF --> PP --> CHUNK --> STORE
-        PP --> GRAPH --> LEIDEN --> STORE
+    subgraph Ingestion["Policy Ingestion"]
+        PDF["Policy PDF"] --> PP["Preprocessor"]
+        PP --> CHUNK["Late Chunking +\nEmbeddings"]
+        PP --> GRAPH["Graph Extraction"]
+        CHUNK --> STORE[("pgvector")]
+        GRAPH --> LEIDEN["Community\nDetection"] --> STORE
     end
 
-    subgraph Retrieval["At Evaluation Time"]
-        QUERY[Query: "CC6.1 access review<br/>requirements"]
-        VEC[Vector Search<br/>Top-K chunks]
-        GRAPH_WALK[Graph Walk<br/>Related obligations]
-        COMMUNITY[Community Context<br/>Topic cluster]
-        MERGE[Merge + Rank<br/>Deduplicate]
-        CRITERIA[Testing Criteria<br/>with weights]
-
-        QUERY --> VEC --> MERGE
-        QUERY --> GRAPH_WALK --> MERGE
-        QUERY --> COMMUNITY --> MERGE
-        MERGE --> CRITERIA
+    subgraph Retrieval["Evaluation-Time Retrieval"]
+        QUERY["Query: CC6.1\nrequirements"] --> VEC["Vector Search"]
+        QUERY --> GW["Graph Walk"]
+        QUERY --> COM["Community\nContext"]
+        VEC --> MERGE["Merge + Rank"]
+        GW --> MERGE
+        COM --> MERGE
+        MERGE --> CRITERIA["Testing Criteria\nwith weights"]
     end
 
-    subgraph Eval["Feeds into Tribunal"]
-        CRITERIA --> PROS2[Prosecutor<br/>uses criteria as<br/>prosecution rubric]
-        CRITERIA --> DEF2[Defender<br/>uses criteria to<br/>identify evidence matches]
-        CRITERIA --> RULES2[Rule Engine<br/>threshold-based<br/>checks]
+    subgraph Eval["Feeds Evaluation"]
+        CRITERIA --> PROS2["Prosecutor"]
+        CRITERIA --> DEF2["Defender"]
+        CRITERIA --> RULES2["Rule Engine"]
     end
 
     style Ingestion fill:#1a2a3a,stroke:#4f8ff7,color:#e6edf3
@@ -167,62 +159,44 @@ flowchart LR
 ## 5. Full Evaluation Flow — RAG + Tribunal Combined
 
 ```mermaid
-flowchart TB
-    START([User: "Evaluate CC6.1"])
+flowchart TD
+    START(["Evaluate CC6.1"]) --> RAG
 
     subgraph RAG["RAG Retrieval"]
-        R1[Policy Graph<br/>→ Obligations for CC6.1]
-        R2[Vector Search<br/>→ Relevant policy sections]
-        R3[Testing Criteria<br/>→ 11 weighted criteria]
-    end
-
-    subgraph Rules["Layer 1: Rules (Deterministic)"]
-        RE[Rule Engine]
-        P1[8 criteria → PASS/FAIL]
-        NJ[3 criteria → NEEDS_JUDGMENT]
-    end
-
-    subgraph Tribunal["Layer 2: Adversarial Tribunal"]
         direction LR
-        subgraph C1["Criterion 9 (weight: 0.25)"]
-            P_1[🗡️ Prosecutor]
-            D_1[🛡️ Defender]
-            J_1[⚖️ Judge]
-            P_1 --> J_1
-            D_1 --> J_1
-        end
-        subgraph C2["Criterion 10 (weight: 0.20)"]
-            P_2[🗡️ Prosecutor]
-            D_2[🛡️ Defender]
-            J_2[⚖️ Judge]
-            P_2 --> J_2
-            D_2 --> J_2
-        end
-        subgraph C3["Criterion 11 (weight: 0.15)"]
-            P_3[🗡️ Prosecutor]
-            J_3[⚖️ Judge<br/>Simplified]
-            P_3 --> J_3
-        end
+        R1["Policy Graph"] --> R3["11 Testing Criteria\nwith weights"]
+        R2["Vector Search"] --> R3
     end
 
-    subgraph Scoring["Layer 3: Scoring"]
-        CALC[Weighted Sum<br/>+ Floor Rules]
-        RESULT[Score: 92%<br/>Status: Compliant]
+    RAG --> RULES
+
+    subgraph RULES["Layer 1: Deterministic Rules"]
+        direction LR
+        RESOLVED["8 criteria resolved\nPASS/FAIL"] 
+        UNRESOLVED["3 criteria\nNEEDS JUDGMENT"]
     end
 
-    START --> RAG
-    RAG --> Rules
-    Rules --> P1
-    Rules --> NJ
-    NJ --> Tribunal
-    P1 --> Scoring
-    Tribunal --> Scoring
-    Scoring --> RESULT
+    RESOLVED --> SCORE
+    UNRESOLVED --> TRIBUNAL
+
+    subgraph TRIBUNAL["Layer 2: Adversarial Tribunal"]
+        direction LR
+        P["Prosecutor"] --> J["Judge"]
+        D["Defender"] --> J
+    end
+
+    TRIBUNAL --> SCORE
+
+    subgraph SCORE["Layer 3: Deterministic Scoring"]
+        CALC["Weighted sum + Floor rules"]
+        RESULT["92% — Compliant"]
+        CALC --> RESULT
+    end
 
     style RAG fill:#1a3a1a,stroke:#3fb950,color:#e6edf3
-    style Rules fill:#1a2a3a,stroke:#4f8ff7,color:#e6edf3
-    style Tribunal fill:#3a2a00,stroke:#d29922,color:#e6edf3
-    style Scoring fill:#2a1a2a,stroke:#a371f7,color:#e6edf3
+    style RULES fill:#1a2a3a,stroke:#4f8ff7,color:#e6edf3
+    style TRIBUNAL fill:#3a2a00,stroke:#d29922,color:#e6edf3
+    style SCORE fill:#2a1a2a,stroke:#a371f7,color:#e6edf3
 ```
 
 ---
@@ -232,34 +206,21 @@ flowchart TB
 ```mermaid
 flowchart LR
     subgraph Problem["Traditional LLM Eval"]
-        SINGLE[Single LLM Call<br/>"Is this compliant?"]
-        RISK1[❌ Confirmation bias]
-        RISK2[❌ Plausible-sounding<br/>but wrong]
-        RISK3[❌ No evidence<br/>grounding]
-        SINGLE --> RISK1 & RISK2 & RISK3
+        SINGLE["Single LLM call:\nIs this compliant?"]
+        SINGLE --> RISK1["Confirmation bias"]
+        SINGLE --> RISK2["Plausible but wrong"]
+        SINGLE --> RISK3["No evidence grounding"]
     end
 
-    subgraph Solution["Our 3-Layer Approach"]
-        direction TB
-        S1[Layer 1: Rules First<br/>60-70% resolved with<br/>ZERO LLM involvement]
-        S2[Prosecutor forced to<br/>argue AGAINST<br/>— surfaces real gaps]
-        S3[Defender forced to<br/>argue FOR<br/>— prevents false negatives]
-        S4[Judge sees BOTH sides<br/>must cite evidence<br/>for every point accepted]
-        S5[Low confidence?<br/>Second tribunal or<br/>flag for human]
-        S1 --> S2 --> S3 --> S4 --> S5
-    end
-
-    subgraph Result["Outcome"]
-        O1[✅ Evidence-grounded]
-        O2[✅ Adversarially tested]
-        O3[✅ Auditable reasoning]
-        O4[✅ Human escalation<br/>when uncertain]
+    subgraph Solution["Our Approach"]
+        S1["Rules resolve 60-70%\nZero LLM"] --> S2["Prosecutor argues FAIL"]
+        S2 --> S4["Judge cites evidence\nfor each point"]
+        S3["Defender argues PASS"] --> S4
+        S4 --> S5["Low confidence?\nRetry or escalate"]
     end
 
     Problem -.->|"replaced by"| Solution
-    Solution --> Result
 
     style Problem fill:#3a1a1a,stroke:#f85149,color:#e6edf3
     style Solution fill:#1a3a1a,stroke:#3fb950,color:#e6edf3
-    style Result fill:#1a2a3a,stroke:#4f8ff7,color:#e6edf3
 ```

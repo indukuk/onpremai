@@ -27,10 +27,19 @@ tasks:
   # agent-eval tasks
   evaluate_control:
     tier: mid
-    description: "Layer 2 LLM judgment for control evaluation"
+    description: "Layer 2 single-call judgment for low-weight criteria"
   evaluate_control_complex:
     tier: strong
     description: "Complex multi-evidence control evaluation"
+  evaluate_prosecute:
+    tier: fast
+    description: "Adversarial tribunal: find all reasons evidence FAILS criterion"
+  evaluate_defend:
+    tier: mid
+    description: "Adversarial tribunal: find all reasons evidence SATISFIES criterion (different model family)"
+  evaluate_judge:
+    tier: strong
+    description: "Adversarial tribunal: weigh prosecution/defense arguments, deliver verdict"
   summarize_findings:
     tier: fast
     description: "Summarize evaluation findings into bullet points"

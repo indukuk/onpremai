@@ -40,6 +40,8 @@ from src.models import (
 class FakeSettings:
     consensus_weight_threshold = 0.20
     consensus_sample_count = 3
+    tribunal_confidence_threshold = 0.70
+    tribunal_max_retries = 1
 
 
 # ---------------------------------------------------------------------------
@@ -212,15 +214,23 @@ class TestEvaluationNode:
 
     @pytest.mark.asyncio
     async def test_normal_judgment_flow(self):
-        """Normal flow: LLM returns valid JSON for each criterion."""
+        """Normal flow: tribunal returns valid verdicts for each criterion."""
         from src.graph.evaluation import evaluation_node
 
+        # Mock LLM: Prosecutor returns arguments, Judge returns PASS verdict
+        call_count = [0]
+
+        async def mock_complete(**kwargs):
+            call_count[0] += 1
+            task = kwargs.get("task", "")
+            if task == "evaluate_prosecute":
+                return MagicMock(content='{"arguments": ["Minor gap noted"], "severity": "low"}')
+            elif task == "evaluate_judge":
+                return MagicMock(content='{"verdict": "PASS", "prosecution_points_accepted": [], "prosecution_points_rejected": ["Minor gap noted"], "defense_points_accepted": [], "defense_points_rejected": [], "justification": "Evidence sufficient", "confidence": 0.9}')
+            return MagicMock(content='{"result": "PASS", "reason": "Evidence sufficient"}')
+
         mock_llm = AsyncMock()
-        mock_llm.complete = AsyncMock(
-            return_value=MagicMock(
-                content='{"result": "PASS", "reason": "Evidence sufficient"}'
-            )
-        )
+        mock_llm.complete = AsyncMock(side_effect=mock_complete)
         mock_llm.close = AsyncMock()
 
         mock_memory = AsyncMock()
@@ -248,15 +258,17 @@ class TestEvaluationNode:
         from src.graph.evaluation import evaluation_node
 
         mock_llm = AsyncMock()
-        call_count = 0
+        call_count = [0]
 
         async def complete_side_effect(**kwargs):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return MagicMock(
-                    content='{"result": "PASS", "reason": "OK"}'
-                )
+            call_count[0] += 1
+            task = kwargs.get("task", "")
+            # Let first criterion's tribunal complete (2 calls for simplified)
+            if call_count[0] <= 2:
+                if task == "evaluate_prosecute":
+                    return MagicMock(content='{"arguments": ["OK"], "severity": "low"}')
+                return MagicMock(content='{"verdict": "PASS", "prosecution_points_accepted": [], "prosecution_points_rejected": [], "defense_points_accepted": [], "defense_points_rejected": [], "justification": "OK", "confidence": 0.9}')
+            # Then exhaust on next criterion
             raise LLMCreditExhaustedError(
                 "Budget exhausted", degradation_level=2
             )
@@ -314,8 +326,8 @@ class TestEvaluationNode:
         assert result["judgment_results"]["C1"].method == EvalMethod.DEGRADED
 
     @pytest.mark.asyncio
-    async def test_consensus_voting_for_high_weight(self):
-        """High-weight criteria use 3-sample consensus voting."""
+    async def test_full_tribunal_for_high_weight(self):
+        """High-weight criteria use full adversarial tribunal (3 models)."""
         from src.graph.evaluation import evaluation_node
 
         high_weight_criteria = [
@@ -331,13 +343,18 @@ class TestEvaluationNode:
         ]
 
         mock_llm = AsyncMock()
-        # Return PASS 2 times, FAIL 1 time -> majority PASS
-        responses = [
-            MagicMock(content='{"result": "PASS", "reason": "Good"}'),
-            MagicMock(content='{"result": "PASS", "reason": "Good"}'),
-            MagicMock(content='{"result": "FAIL", "reason": "Bad"}'),
-        ]
-        mock_llm.complete = AsyncMock(side_effect=responses)
+
+        async def tribunal_complete(**kwargs):
+            task = kwargs.get("task", "")
+            if task == "evaluate_prosecute":
+                return MagicMock(content='{"arguments": ["Minor concern"], "severity": "low"}')
+            elif task == "evaluate_defend":
+                return MagicMock(content='{"arguments": ["Strong evidence found"], "strength": "high"}')
+            elif task == "evaluate_judge":
+                return MagicMock(content='{"verdict": "PASS", "prosecution_points_accepted": [], "prosecution_points_rejected": ["Minor concern"], "defense_points_accepted": ["Strong evidence found"], "defense_points_rejected": [], "justification": "Defense prevails", "confidence": 0.92}')
+            return MagicMock(content='{"result": "PASS", "reason": "OK"}')
+
+        mock_llm.complete = AsyncMock(side_effect=tribunal_complete)
         mock_llm.close = AsyncMock()
 
         mock_memory = AsyncMock()
@@ -356,8 +373,9 @@ class TestEvaluationNode:
             result = await evaluation_node(state)
 
         assert result["judgment_results"]["C1"].result == CriterionResultEnum.PASS
-        # Confidence should be 2/3
-        assert result["judgment_results"]["C1"].confidence == pytest.approx(2 / 3, rel=0.01)
+        assert result["judgment_results"]["C1"].confidence == pytest.approx(0.92, rel=0.01)
+        # Full tribunal: 3 calls (prosecutor + defender + judge)
+        assert mock_llm.complete.call_count == 3
 
     @pytest.mark.asyncio
     async def test_timing_stats_populated(self):

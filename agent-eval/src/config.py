@@ -33,9 +33,10 @@ class EvalSettings(CommonSettings):
     # --- Caching ---
     cache_staleness_hours: int = 168  # 7 days default
 
-    # --- LLM Judgment ---
-    consensus_weight_threshold: float = 0.20
-    consensus_sample_count: int = 3
+    # --- LLM Judgment (Adversarial Tribunal) ---
+    consensus_weight_threshold: float = 0.20  # >= this: full tribunal
+    tribunal_confidence_threshold: float = 0.70  # below this: escalate to retry
+    tribunal_max_retries: int = 1  # max re-tribunals on low confidence
 
 
 def get_settings() -> EvalSettings:

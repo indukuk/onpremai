@@ -1,9 +1,16 @@
 """Layer 2: LLM judgment node for NEEDS_JUDGMENT criteria.
 
-Only called for criteria that the deterministic rule engine could not
-resolve. Each criterion gets a bounded, specific question with an
-anchored rubric. The LLM returns a categorical result (PASS/PARTIAL/FAIL)
-plus a one-sentence reason.
+Uses tiered evaluation based on criterion weight:
+- weight >= 0.20: Full Adversarial Tribunal (Prosecutor + Defender + Judge)
+  using 3 different model families for error decorrelation
+- weight 0.10-0.19: Simplified Tribunal (Prosecutor + Judge)
+- weight < 0.10: Single structured call with rubric
+
+Research basis for multi-model tribunal:
+- Du et al. 2023: multi-agent debate improves accuracy 7-16pp
+- DEI 2025: heterogeneous model ensembles outperform homogeneous by 124%
+- PoLL 2024: diverse smaller model panels outperform single large judge, 7x cheaper
+- Wang et al. 2024 (MoA): heterogeneous configs consistently beat homogeneous
 
 Handles LLMCreditExhaustedError gracefully by marking remaining criteria
 as INSUFFICIENT_EVIDENCE and setting partial_evaluation=True.
@@ -22,6 +29,7 @@ from common.errors import LLMCreditExhaustedError, LLMUnavailableError
 
 from src.config import get_settings
 from src.graph.state import EvalGraphState
+from src.graph.tribunal import run_simplified_tribunal, run_tribunal
 from src.models import (
     Criterion,
     CriterionResult,
@@ -184,12 +192,79 @@ async def _judge_single_criterion(
     trace_id: str,
     settings: Any,
 ) -> CriterionResult:
-    """Evaluate a single criterion using the LLM.
+    """Evaluate a single criterion using tiered LLM judgment.
 
-    For high-weight criteria, uses 3-sample consensus.
+    Dispatch by criterion weight:
+    - >= 0.20: Full Adversarial Tribunal (3 diverse models)
+    - 0.10-0.19: Simplified Tribunal (Prosecutor + Judge)
+    - < 0.10: Single structured call
     """
     evidence_text = _extract_relevant_evidence(criterion, evidence_metadata)
 
+    # High-weight: Full tribunal with 3 different model families
+    if criterion.weight >= settings.consensus_weight_threshold:
+        tribunal_result = await run_tribunal(
+            llm=llm,
+            criterion=criterion,
+            evidence_text=evidence_text or "No relevant evidence text available.",
+            tenant_id=tenant_id,
+            trace_id=trace_id,
+        )
+
+        # Confidence-based escalation: retry if Judge is uncertain
+        if (
+            tribunal_result.confidence < settings.tribunal_confidence_threshold
+            and settings.tribunal_max_retries > 0
+        ):
+            logger.info(
+                "tribunal_low_confidence_retry",
+                criterion_id=criterion.id,
+                confidence=tribunal_result.confidence,
+                trace_id=trace_id,
+            )
+            retry_result = await run_tribunal(
+                llm=llm,
+                criterion=criterion,
+                evidence_text=evidence_text or "No relevant evidence text available.",
+                tenant_id=tenant_id,
+                trace_id=f"{trace_id}:retry",
+            )
+
+            # If both agree, use that verdict (average confidence)
+            if retry_result.verdict == tribunal_result.verdict:
+                tribunal_result.confidence = (
+                    tribunal_result.confidence + retry_result.confidence
+                ) / 2
+            # If they disagree, mark as CANNOT_ASSESS
+            elif retry_result.confidence > tribunal_result.confidence:
+                tribunal_result = retry_result
+            else:
+                return CriterionResult(
+                    criterion_id=criterion.id,
+                    category=criterion.category,
+                    result=CriterionResultEnum.CANNOT_ASSESS,
+                    method=EvalMethod.LLM_JUDGMENT,
+                    reason=(
+                        f"Two tribunals disagreed: {tribunal_result.verdict.value} vs "
+                        f"{retry_result.verdict.value}. Needs human review."
+                    ),
+                    confidence=0.0,
+                )
+
+        return tribunal_result.to_criterion_result(criterion.category)
+
+    # Medium-weight: Simplified tribunal (Prosecutor + Judge only)
+    if criterion.weight >= 0.10:
+        tribunal_result = await run_simplified_tribunal(
+            llm=llm,
+            criterion=criterion,
+            evidence_text=evidence_text or "No relevant evidence text available.",
+            tenant_id=tenant_id,
+            trace_id=trace_id,
+        )
+        return tribunal_result.to_criterion_result(criterion.category)
+
+    # Low-weight: Single structured call (cheapest, fastest)
     prompt = JUDGMENT_PROMPT.format(
         criterion_id=criterion.id,
         category=criterion.category,
@@ -198,18 +273,6 @@ async def _judge_single_criterion(
         fail_condition=criterion.fail_condition,
         evidence_text=evidence_text if evidence_text else "No relevant evidence text available.",
     )
-
-    use_consensus = criterion.weight > settings.consensus_weight_threshold
-
-    if use_consensus:
-        return await _consensus_judgment(
-            llm=llm,
-            prompt=prompt,
-            criterion=criterion,
-            tenant_id=tenant_id,
-            trace_id=trace_id,
-            sample_count=settings.consensus_sample_count,
-        )
 
     response = await llm.complete(
         messages=[{"role": "user", "content": prompt}],
@@ -221,48 +284,6 @@ async def _judge_single_criterion(
     )
 
     return _parse_judgment_response(response.content, criterion)
-
-
-async def _consensus_judgment(
-    llm: LLMClient,
-    prompt: str,
-    criterion: Criterion,
-    tenant_id: str,
-    trace_id: str,
-    sample_count: int,
-) -> CriterionResult:
-    """Run multiple LLM calls and take majority vote for high-weight criteria."""
-    results: list[CriterionResultEnum] = []
-    reasons: list[str] = []
-
-    for _ in range(sample_count):
-        response = await llm.complete(
-            messages=[{"role": "user", "content": prompt}],
-            task="evaluate_control",
-            tenant_id=tenant_id,
-            trace_id=trace_id,
-            temperature=0.0,
-            max_tokens=200,
-        )
-        parsed = _parse_judgment_response(response.content, criterion)
-        results.append(parsed.result)
-        reasons.append(parsed.reason)
-
-    # Majority vote
-    from collections import Counter
-
-    vote_counts = Counter(results)
-    majority_result = vote_counts.most_common(1)[0][0]
-    majority_reason = reasons[results.index(majority_result)]
-
-    return CriterionResult(
-        criterion_id=criterion.id,
-        category=criterion.category,
-        result=majority_result,
-        method=EvalMethod.LLM_JUDGMENT,
-        reason=majority_reason,
-        confidence=vote_counts[majority_result] / sample_count,
-    )
 
 
 def _parse_judgment_response(content: str, criterion: Criterion) -> CriterionResult:

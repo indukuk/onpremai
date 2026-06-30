@@ -13,6 +13,8 @@ from src.routes.interactions import router as interactions_router
 from src.routes.audit import router as audit_router
 from src.routes.registry import router as registry_router
 from src.routes.jobs import router as jobs_router
+from src.routes.user_state import router as user_state_router
+from src.routes.events import router as events_router
 
 
 def register_routes(app_router: APIRouter) -> None:
@@ -28,3 +30,5 @@ def register_routes(app_router: APIRouter) -> None:
     app_router.include_router(audit_router)
     app_router.include_router(registry_router)
     app_router.include_router(jobs_router)
+    app_router.include_router(user_state_router)
+    app_router.include_router(events_router)

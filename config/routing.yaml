@@ -68,6 +68,14 @@ tasks:
     tier: fast
     description: "Suggest routing config optimizations"
 
+  # session/state tasks
+  session_reflection:
+    tier: fast
+    description: "End-of-session distillation into structured summary"
+  state_doc_update:
+    tier: fast
+    description: "Merge reflection into user state document"
+
 # Escalation rules: if confidence < threshold, escalate to next tier
 escalation:
   enabled: true

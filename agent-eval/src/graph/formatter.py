@@ -78,6 +78,7 @@ async def formatter_node(state: EvalGraphState) -> dict[str, Any]:
     # Merge all criterion results
     rule_results: dict[str, CriterionResult] = state.get("rule_results", {})
     judgment_results: dict[str, CriterionResult] = state.get("judgment_results", {})
+    tribunal_justifications: dict[str, dict[str, Any]] = state.get("tribunal_justifications", {})
 
     all_results: dict[str, CriterionResult] = {}
     all_results.update(rule_results)
@@ -117,6 +118,60 @@ async def formatter_node(state: EvalGraphState) -> dict[str, Any]:
         sandbox_ms=timing.sandbox_ms,
     )
 
+    # Assemble justification document
+    layer1_count = len(rule_results)
+    layer2_count = len(judgment_results)
+
+    # Determine floor rules applied
+    floor_rules_applied: list[str] = []
+    policy_fail = any(
+        r.category == "policy" and r.result == CriterionResultEnum.FAIL
+        for r in all_results.values()
+    )
+    if policy_fail and final_score <= 0.84:
+        floor_rules_applied.append("policy_fail_cap_0.84")
+
+    impl_total = sum(1 for r in all_results.values() if r.category == "implementation")
+    impl_fail = sum(
+        1 for r in all_results.values()
+        if r.category == "implementation" and r.result == CriterionResultEnum.FAIL
+    )
+    if impl_total > 0 and impl_fail / impl_total > 0.25:
+        floor_rules_applied.append("implementation_fail_ratio_gt_25pct")
+
+    justification: dict[str, Any] = {
+        "summary": (
+            f"Control {control_id} is {final_status.value}. "
+            f"{layer1_count} criteria resolved by rules, "
+            f"{layer2_count} by tribunal."
+        ),
+        "layer1_justification": {
+            "method": "deterministic_rules",
+            "resolved_count": layer1_count,
+            "criteria": [
+                {
+                    "criterion_id": cid,
+                    "result": result.result.value,
+                    "method": result.method.value,
+                    "reason": result.reason,
+                    "evidence_cited": result.evidence_used,
+                }
+                for cid, result in rule_results.items()
+            ],
+        },
+        "layer2_justification": {
+            "method": "adversarial_tribunal",
+            "resolved_count": layer2_count,
+            "criteria": tribunal_justifications,
+        },
+        "layer3_justification": {
+            "method": "deterministic_scoring",
+            "score": round(final_score, 4),
+            "status": final_status.value,
+            "floor_rules_applied": floor_rules_applied,
+        },
+    }
+
     # Build final result
     eval_result = EvalResult(
         evaluation_id=str(uuid.uuid4()),
@@ -127,6 +182,7 @@ async def formatter_node(state: EvalGraphState) -> dict[str, Any]:
         status=final_status,
         evidence_hash=evidence_hash,
         criteria_results=ordered_results,
+        justification=justification,
         layer_stats=layer_stats,
         timing=final_timing,
         partial_evaluation=partial_evaluation,
@@ -170,6 +226,23 @@ async def formatter_node(state: EvalGraphState) -> dict[str, Any]:
                 "trace_id": trace_id,
             },
         )
+
+        # Create evaluation decision record (fire-and-forget)
+        try:
+            await memory.eval_decision_create(
+                evaluation_id=eval_result.evaluation_id,
+                tenant_id=tenant_id,
+                control_id=control_id,
+                framework=framework,
+                ai_score=round(final_score, 4),
+                ai_status=final_status.value,
+            )
+        except Exception as exc:
+            logger.warning(
+                "eval_decision_create_failed",
+                error=str(exc),
+                trace_id=trace_id,
+            )
 
         # Publish evaluation_completed event
         try:

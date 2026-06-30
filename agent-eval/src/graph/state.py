@@ -54,6 +54,7 @@ class EvalGraphState(TypedDict, total=False):
 
     # Layer 2 - LLM Judgment
     judgment_results: dict[str, CriterionResult]
+    tribunal_justifications: dict[str, dict[str, Any]]  # criterion_id -> tribunal doc
 
     # Layer 3 - Scoring
     final_score: float

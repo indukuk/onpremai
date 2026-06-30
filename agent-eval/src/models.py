@@ -174,6 +174,7 @@ class EvalResult(BaseModel):
     status: ComplianceStatus = ComplianceStatus.INSUFFICIENT_EVIDENCE
     evidence_hash: str = ""
     criteria_results: list[CriterionResult] = Field(default_factory=list)
+    justification: dict[str, Any] = Field(default_factory=dict)
     layer_stats: LayerStats = Field(default_factory=LayerStats)
     timing: TimingStats = Field(default_factory=TimingStats)
     partial_evaluation: bool = False
@@ -266,6 +267,7 @@ class EvalState(BaseModel):
 
     # Layer 2 - LLM Judgment
     judgment_results: dict[str, CriterionResult] = Field(default_factory=dict)
+    tribunal_justifications: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
     # Layer 3 - Scoring
     final_score: float = 0.0

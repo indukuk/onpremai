@@ -29,7 +29,7 @@ from common.errors import LLMCreditExhaustedError, LLMUnavailableError
 
 from src.config import get_settings
 from src.graph.state import EvalGraphState
-from src.graph.tribunal import run_simplified_tribunal, run_tribunal
+from src.graph.tribunal import TribunalResult, run_simplified_tribunal, run_tribunal
 from src.models import (
     Criterion,
     CriterionResult,
@@ -94,13 +94,14 @@ async def evaluation_node(state: EvalGraphState) -> dict[str, Any]:
 
     if not needs_judgment or testing_criteria is None:
         elapsed_ms = (time.time() - start_time) * 1000
-        return _build_response(state, {}, elapsed_ms, existing_stats, False, 0)
+        return _build_response(state, {}, {}, elapsed_ms, existing_stats, False, 0)
 
     settings = get_settings()
     llm = LLMClient()
     memory = MemoryClient()
 
     judgment_results: dict[str, CriterionResult] = {}
+    tribunal_justifications: dict[str, dict[str, Any]] = {}
     llm_calls = 0
     partial_evaluation = False
 
@@ -116,7 +117,7 @@ async def evaluation_node(state: EvalGraphState) -> dict[str, Any]:
                 continue
 
             try:
-                result = await _judge_single_criterion(
+                result, justification_doc = await _judge_single_criterion(
                     llm=llm,
                     criterion=criterion,
                     evidence_metadata=evidence_metadata,
@@ -125,6 +126,8 @@ async def evaluation_node(state: EvalGraphState) -> dict[str, Any]:
                     settings=settings,
                 )
                 judgment_results[criterion_id] = result
+                if justification_doc is not None:
+                    tribunal_justifications[criterion_id] = justification_doc
                 llm_calls += 1
 
             except LLMCreditExhaustedError as exc:
@@ -180,7 +183,7 @@ async def evaluation_node(state: EvalGraphState) -> dict[str, Any]:
     )
 
     return _build_response(
-        state, judgment_results, elapsed_ms, existing_stats, partial_evaluation, llm_calls
+        state, judgment_results, tribunal_justifications, elapsed_ms, existing_stats, partial_evaluation, llm_calls
     )
 
 
@@ -191,13 +194,17 @@ async def _judge_single_criterion(
     tenant_id: str,
     trace_id: str,
     settings: Any,
-) -> CriterionResult:
+) -> tuple[CriterionResult, dict[str, Any] | None]:
     """Evaluate a single criterion using tiered LLM judgment.
 
     Dispatch by criterion weight:
     - >= 0.20: Full Adversarial Tribunal (3 diverse models)
     - 0.10-0.19: Simplified Tribunal (Prosecutor + Judge)
     - < 0.10: Single structured call
+
+    Returns:
+        Tuple of (CriterionResult, justification_doc or None).
+        justification_doc is populated for tribunal evaluations.
     """
     evidence_text = _extract_relevant_evidence(criterion, evidence_metadata)
 
@@ -239,19 +246,22 @@ async def _judge_single_criterion(
             elif retry_result.confidence > tribunal_result.confidence:
                 tribunal_result = retry_result
             else:
-                return CriterionResult(
-                    criterion_id=criterion.id,
-                    category=criterion.category,
-                    result=CriterionResultEnum.CANNOT_ASSESS,
-                    method=EvalMethod.LLM_JUDGMENT,
-                    reason=(
-                        f"Two tribunals disagreed: {tribunal_result.verdict.value} vs "
-                        f"{retry_result.verdict.value}. Needs human review."
+                return (
+                    CriterionResult(
+                        criterion_id=criterion.id,
+                        category=criterion.category,
+                        result=CriterionResultEnum.CANNOT_ASSESS,
+                        method=EvalMethod.LLM_JUDGMENT,
+                        reason=(
+                            f"Two tribunals disagreed: {tribunal_result.verdict.value} vs "
+                            f"{retry_result.verdict.value}. Needs human review."
+                        ),
+                        confidence=0.0,
                     ),
-                    confidence=0.0,
+                    None,
                 )
 
-        return tribunal_result.to_criterion_result(criterion.category)
+        return tribunal_result.to_criterion_result(criterion.category), tribunal_result.to_justification_doc()
 
     # Medium-weight: Simplified tribunal (Prosecutor + Judge only)
     if criterion.weight >= 0.10:
@@ -262,7 +272,7 @@ async def _judge_single_criterion(
             tenant_id=tenant_id,
             trace_id=trace_id,
         )
-        return tribunal_result.to_criterion_result(criterion.category)
+        return tribunal_result.to_criterion_result(criterion.category), tribunal_result.to_justification_doc()
 
     # Low-weight: Single structured call (cheapest, fastest)
     prompt = JUDGMENT_PROMPT.format(
@@ -283,7 +293,7 @@ async def _judge_single_criterion(
         max_tokens=200,
     )
 
-    return _parse_judgment_response(response.content, criterion)
+    return _parse_judgment_response(response.content, criterion), None
 
 
 def _parse_judgment_response(content: str, criterion: Criterion) -> CriterionResult:
@@ -385,6 +395,7 @@ def _extract_relevant_evidence(
 def _build_response(
     state: EvalGraphState,
     judgment_results: dict[str, CriterionResult],
+    tribunal_justifications: dict[str, dict[str, Any]],
     elapsed_ms: float,
     existing_stats: LayerStats | None,
     partial_evaluation: bool,
@@ -408,6 +419,7 @@ def _build_response(
 
     return {
         "judgment_results": judgment_results,
+        "tribunal_justifications": tribunal_justifications,
         "partial_evaluation": partial_evaluation,
         "timing": TimingStats(**timing_dict),
         "layer_stats": LayerStats(**stats_dict),

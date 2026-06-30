@@ -379,6 +379,114 @@ class MemoryClient:
             return result
         return result.get("events", []) if isinstance(result, dict) else []
 
+    # --- Evaluation Decisions (R7e) ---
+
+    async def eval_decision_create(
+        self,
+        evaluation_id: str,
+        tenant_id: str,
+        control_id: str,
+        framework: str,
+        ai_score: float,
+        ai_status: str,
+    ) -> bool:
+        """Create an evaluation decision record (draft status). Returns True on success."""
+        payload = {
+            "evaluation_id": evaluation_id,
+            "tenant_id": tenant_id,
+            "control_id": control_id,
+            "framework": framework,
+            "ai_score": ai_score,
+            "ai_status": ai_status,
+        }
+        return await self._post("/v1/evaluation-decisions/create", payload)
+
+    async def eval_decision_get(
+        self,
+        evaluation_id: str,
+        tenant_id: str,
+    ) -> dict:
+        """Get evaluation decision record. Returns empty dict on failure."""
+        payload = {"evaluation_id": evaluation_id, "tenant_id": tenant_id}
+        result = await self._post_json("/v1/evaluation-decisions/get", payload)
+        return result if isinstance(result, dict) else {}
+
+    async def eval_decision_override(
+        self,
+        evaluation_id: str,
+        tenant_id: str,
+        criterion_id: str,
+        ai_result: str,
+        user_result: str,
+        reason: str,
+        overridden_by: str,
+    ) -> bool:
+        """Override a criterion in an evaluation decision. Returns True on success."""
+        payload = {
+            "evaluation_id": evaluation_id,
+            "tenant_id": tenant_id,
+            "criterion_id": criterion_id,
+            "ai_result": ai_result,
+            "user_result": user_result,
+            "reason": reason,
+            "overridden_by": overridden_by,
+        }
+        return await self._post("/v1/evaluation-decisions/override", payload)
+
+    async def eval_decision_approve(
+        self,
+        evaluation_id: str,
+        tenant_id: str,
+        approved_by: str,
+        notes: str = "",
+    ) -> bool:
+        """Approve an evaluation decision. Returns True on success."""
+        payload = {
+            "evaluation_id": evaluation_id,
+            "tenant_id": tenant_id,
+            "approved_by": approved_by,
+            "notes": notes,
+        }
+        return await self._post("/v1/evaluation-decisions/approve", payload)
+
+    # --- Evaluation Comments (R7g) ---
+
+    async def eval_comments_add(
+        self,
+        evaluation_id: str,
+        tenant_id: str,
+        author_id: str,
+        author_role: str,
+        content: str,
+        criterion_id: str | None = None,
+        parent_comment_id: str | None = None,
+    ) -> bool:
+        """Add a comment to an evaluation. Returns True on success."""
+        payload: dict[str, Any] = {
+            "evaluation_id": evaluation_id,
+            "tenant_id": tenant_id,
+            "author_id": author_id,
+            "author_role": author_role,
+            "content": content,
+        }
+        if criterion_id is not None:
+            payload["criterion_id"] = criterion_id
+        if parent_comment_id is not None:
+            payload["parent_comment_id"] = parent_comment_id
+        return await self._post("/v1/evaluation-comments/add", payload)
+
+    async def eval_comments_list(
+        self,
+        evaluation_id: str,
+        tenant_id: str,
+    ) -> list[dict]:
+        """List comments for an evaluation. Returns [] on failure."""
+        payload = {"evaluation_id": evaluation_id, "tenant_id": tenant_id}
+        result = await self._post_json("/v1/evaluation-comments/list", payload)
+        if isinstance(result, list):
+            return result
+        return result.get("comments", []) if isinstance(result, dict) else []
+
     # --- Internal Helpers ---
 
     async def _post(self, path: str, payload: dict) -> bool:

@@ -15,6 +15,8 @@ from src.routes.registry import router as registry_router
 from src.routes.jobs import router as jobs_router
 from src.routes.user_state import router as user_state_router
 from src.routes.events import router as events_router
+from src.routes.evaluation_decisions import router as evaluation_decisions_router
+from src.routes.evaluation_comments import router as evaluation_comments_router
 
 
 def register_routes(app_router: APIRouter) -> None:
@@ -32,3 +34,5 @@ def register_routes(app_router: APIRouter) -> None:
     app_router.include_router(jobs_router)
     app_router.include_router(user_state_router)
     app_router.include_router(events_router)
+    app_router.include_router(evaluation_decisions_router)
+    app_router.include_router(evaluation_comments_router)

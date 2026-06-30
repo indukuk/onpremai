@@ -228,6 +228,9 @@ class ProcessingPipeline:
         # Step 9: Publish event for shadow agent notification (best-effort)
         await self._publish_ingestion_event(metadata)
 
+        # Step 10: Policy analysis pipeline (if document is a policy)
+        await self._maybe_run_policy_analysis(metadata)
+
         record_processing(success=True)
         logger.info(
             "file_processed_successfully",
@@ -625,6 +628,66 @@ class ProcessingPipeline:
         except Exception as exc:
             logger.warning(
                 "event_publish_failed",
+                file_key=metadata.file_key,
+                error=str(exc),
+            )
+
+    async def _maybe_run_policy_analysis(self, metadata: FileMetadata) -> None:
+        """Run policy analysis pipeline if the document is a compliance policy.
+
+        Best-effort: failures are logged and never crash file processing.
+        """
+        if not self._settings.memory_url or not self._settings.llm_gateway_url:
+            return
+
+        if not metadata.tenant_id:
+            return
+
+        text_content = metadata.text_content or ""
+        if not text_content:
+            return
+
+        try:
+            from src.policy_analysis.pipeline import PolicyAnalysisPipeline, is_policy_document
+
+            if not is_policy_document(metadata.filename, text_content):
+                return
+
+            logger.info(
+                "policy_document_detected",
+                file_key=metadata.file_key,
+                filename=metadata.filename,
+            )
+
+            from common.clients import LLMClient, MemoryClient
+
+            llm = LLMClient(gateway_url=self._settings.llm_gateway_url)
+            memory = MemoryClient(memory_url=self._settings.memory_url)
+
+            try:
+                pipeline = PolicyAnalysisPipeline(llm=llm, memory=memory)
+                result = await pipeline.run(
+                    tenant_id=metadata.tenant_id,
+                    document_key=metadata.file_key,
+                    document_name=metadata.filename,
+                    text_content=text_content,
+                    framework="soc2",
+                )
+
+                logger.info(
+                    "policy_analysis_complete",
+                    file_key=metadata.file_key,
+                    status=result.current_step,
+                    criteria_generated=result.criteria_generated,
+                    errors=len(result.errors),
+                )
+            finally:
+                await llm.close()
+                await memory.close()
+
+        except Exception as exc:
+            logger.warning(
+                "policy_analysis_failed",
                 file_key=metadata.file_key,
                 error=str(exc),
             )

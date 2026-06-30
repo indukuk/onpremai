@@ -68,6 +68,15 @@ tasks:
   document_summarization:
     tier: mid
     description: "Summarize large documents for context storage"
+  extract_policy_obligations:
+    tier: mid
+    description: "Extract obligations, roles, terms from policy section"
+  map_obligation_to_control:
+    tier: mid
+    description: "Map policy obligations to framework controls"
+  generate_testing_criteria:
+    tier: strong
+    description: "Generate tenant-specific testing criteria from policy obligations"
 
   # observer tasks
   pattern_analysis:

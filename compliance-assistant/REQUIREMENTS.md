@@ -694,3 +694,262 @@ TOOL_TIMEOUT_SEC: 10
   3. User confirms → agent calls `tools/call` again with `confirmed: true`
   4. User cancels → agent acknowledges, logs the cancellation
 - Agent MUST show the MCP server's summary text to user (not generate its own)
+
+---
+
+## Shadow Agent V2: Persistent Intelligence
+
+The following requirements address gaps identified through research into persistent personal agent architectures (MemGPT/CoALA, Stanford Generative Agents, Microsoft Copilot, Dust.tt, Lindy.ai). The current agent reconstructs state from scattered vector queries each session — it has no accumulated judgment, no cross-session continuity beyond raw facts, and no awareness of what happened between sessions.
+
+These requirements make the shadow agent genuinely persistent: it distills sessions into understanding, maintains a living model of each user, and accumulates events between sessions for proactive action.
+
+### R15: Session Reflection
+
+**Problem:** Sessions end without distilling what happened. The next session reconstructs state from raw memory queries — lossy, expensive, and unable to capture meta-observations ("user was frustrated about marketing team delays").
+
+#### Requirements
+
+| ID | Requirement | Priority |
+|----|-------------|----------|
+| R15.1 | Agent MUST run a reflection pass when a session meets reflection criteria | Must |
+| R15.2 | Reflection criteria: `message_count >= 6` OR user sends explicit goodbye signal | Must |
+| R15.3 | Reflection MUST use the cheapest available LLM tier (task: `session_reflection`) | Must |
+| R15.4 | Reflection output MUST be structured: accomplished, pending, commitments, preferences | Must |
+| R15.5 | Accomplishments and pending items stored as interaction records (type: `session_reflection`) | Must |
+| R15.6 | User preferences stored as user-level facts (category: `preference`, max 3 per session) | Must |
+| R15.7 | Reflection MUST be non-blocking — response goes to user immediately, reflection runs async | Must |
+| R15.8 | If LLM unavailable (credit exhausted, gateway down), reflection MUST be skipped silently | Must |
+| R15.9 | Reflection input excludes system prompt (only user/assistant/tool messages) | Should |
+| R15.10 | Reflection input truncates tool results to 200 chars (bounded cost on cheap tier) | Should |
+| R15.11 | Reflection caps at last 30 messages (sufficient signal, bounded cost) | Should |
+| R15.12 | Goodbye signals: "bye", "goodbye", "thanks", "done", "that's all", "talk later", "later" | Should |
+
+#### Reflection Output Schema
+
+```json
+{
+  "accomplished": ["Uploaded access review logs for CC6.1", "Ran evaluation — PASS"],
+  "pending": ["CC8.1 evidence still needed — user said 'next week'"],
+  "commitments": ["Agent offered to send reminder to marketing team on Monday"],
+  "preferences": ["User prefers bullet-point summaries over paragraphs"]
+}
+```
+
+#### Integration
+
+The next session's context builder MUST include the most recent reflection in the system prompt, enabling the agent to say "Last time we finished X and you deferred Y."
+
+### R16: User State Document
+
+**Problem:** Context builder makes 5+ parallel memory queries (tenant_recall, user_recall, interaction_recall for tasks, interaction_recall for overdue, MCP resource read). Each is semantic search — probabilistic, potentially missing relevant facts. A structured living document per user-tenant pair provides deterministic, complete state without retrieval uncertainty.
+
+#### Requirements
+
+| ID | Requirement | Priority |
+|----|-------------|----------|
+| R16.1 | System MUST maintain a structured User State Document per user-tenant pair | Must |
+| R16.2 | Document stored as a single memory record (type: `user_state_doc`) | Must |
+| R16.3 | Document includes: current_focus, last_session_summary, pending_actions, learned_preferences, working_patterns | Must |
+| R16.4 | Context builder MUST read user state doc as primary context source | Must |
+| R16.5 | Agent MUST update user state doc at end of each session (post-reflection) | Must |
+| R16.6 | Updates MUST be incremental — merge new information, don't overwrite the full doc | Must |
+| R16.7 | Document has max size (2000 chars) — older/stale entries evicted when new ones added | Should |
+| R16.8 | Pending actions include created_date so stale items can be identified | Should |
+| R16.9 | Preferences accumulate (append new, keep existing) up to max 10 | Should |
+| R16.10 | If user state doc unavailable (memory down), fall back to existing vector recall queries | Must |
+| R16.11 | User state doc is tenant-scoped — same user in different tenants has separate docs | Must |
+
+#### User State Document Schema
+
+```json
+{
+  "user_id": "sarah-001",
+  "tenant_id": "acme-corp",
+  "updated_at": "2025-01-15T14:30:00Z",
+  "current_focus": "SOC2 audit prep — CC6.x and CC8.x controls",
+  "last_session": {
+    "date": "2025-01-15",
+    "summary": "Uploaded CC6.1 access review logs. Evaluation passed. Deferred CC8.1 to next week.",
+    "mood": "productive"
+  },
+  "pending_actions": [
+    {"action": "Upload CC8.1 change management logs", "created": "2025-01-15", "source": "user_deferred"},
+    {"action": "Send reminder to marketing team about CC7.2", "created": "2025-01-14", "source": "agent_committed"}
+  ],
+  "preferences": [
+    "Prefers bullet-point summaries",
+    "Wants to see readiness % impact with every action",
+    "Likes to work on one control at a time, in priority order"
+  ],
+  "working_patterns": {
+    "avg_session_length": 8,
+    "typical_session_time": "morning",
+    "skills_most_used": ["cm/gap_analysis", "contributor/upload_guidance"]
+  }
+}
+```
+
+#### Context Builder Integration
+
+The "About This User" section changes from scattered vector results to a deterministic, structured prompt:
+
+```
+## About This User
+Name: Sarah
+Role: compliance_manager
+Focus: SOC2 audit prep — CC6.x and CC8.x controls
+Last session (Jan 15): Uploaded CC6.1 access review. Evaluation passed. Deferred CC8.1.
+Pending: Upload CC8.1 change management logs | Send reminder to marketing (committed Jan 14)
+Preferences: bullet-point summaries, show readiness % impact, one control at a time
+```
+
+One API call replaces 5 vector searches. Deterministic, complete, cheaper.
+
+### R17: Proactive Event Queue
+
+**Problem:** The shadow agent only computes priorities at session start. Between sessions, events happen (evidence uploaded, deadlines approaching, evaluations completing, other agents acting). The next session opener should reflect what changed — not just current status, but delta since last interaction.
+
+#### Requirements
+
+| ID | Requirement | Priority |
+|----|-------------|----------|
+| R17.1 | System MUST maintain a per-user event queue that accumulates between sessions | Must |
+| R17.2 | Events stored in memory-service (type: `event_queue`, keyed by user_id + tenant_id) | Must |
+| R17.3 | Event producers: other services push events via memory-service API | Must |
+| R17.4 | On session start (/init), agent MUST drain the event queue and include events in opener context | Must |
+| R17.5 | Events have: event_type, summary, timestamp, priority (high/medium/low), source_service | Must |
+| R17.6 | Agent presents high-priority events first in proactive opener | Must |
+| R17.7 | Events cleared from queue after being presented to user | Must |
+| R17.8 | Queue max depth: 50 events — oldest low-priority events evicted first | Should |
+| R17.9 | Events older than 7 days summarized into single "while you were away" entry | Should |
+| R17.10 | If queue empty, opener behavior unchanged (status-based as today) | Must |
+| R17.11 | Event queue is tenant-scoped | Must |
+
+#### Event Types
+
+| Event Type | Source | Example |
+|------------|--------|---------|
+| `evidence_uploaded` | preprocessor | "Marketing team uploaded access review logs for CC7.2" |
+| `evaluation_completed` | agent-eval | "CC6.1 re-evaluated: PASS (was PARTIAL)" |
+| `deadline_approaching` | scheduler | "CC8.1 evidence due in 2 days" |
+| `deadline_missed` | scheduler | "CC8.1 evidence is now 1 day overdue" |
+| `readiness_changed` | agent-eval | "Readiness moved from 72% to 78%" |
+| `escalation_triggered` | compliance-assistant | "Compliance manager escalated CC7.2 to you" |
+| `team_action` | compliance-assistant | "Mike completed CC9.1 — assigned to your audit review" |
+| `agent_commitment_due` | scheduler | "You committed to remind marketing team today" |
+
+#### Event Schema
+
+```json
+{
+  "event_id": "evt-abc-123",
+  "user_id": "sarah-001",
+  "tenant_id": "acme-corp",
+  "event_type": "evaluation_completed",
+  "summary": "CC6.1 re-evaluated: PASS (was PARTIAL). Readiness impact: +3%.",
+  "timestamp": "2025-01-15T09:00:00Z",
+  "priority": "medium",
+  "source_service": "agent-eval",
+  "metadata": {"control_id": "CC6.1", "old_status": "partial", "new_status": "pass"}
+}
+```
+
+#### Inter-Service Event Publishing
+
+Other services push events via memory-service:
+
+```python
+# In agent-eval, after completing an evaluation:
+await memory.event_queue_push(
+    user_id=control_owner_id,
+    tenant_id=tenant_id,
+    event_type="evaluation_completed",
+    summary=f"{control_id} evaluated: {status}",
+    priority="medium",
+    source_service="agent-eval",
+)
+```
+
+#### Memory Service Dependency
+
+New endpoints required:
+- `POST /v1/event/push` — add event to user's queue
+- `POST /v1/event/drain` — read + clear events for a user
+
+### R18: Commitment Tracking
+
+**Problem:** The agent makes promises ("I'll remind marketing on Monday", "I'll re-run this evaluation tomorrow") but has no mechanism to track or honor them. Commitments vanish into conversation history.
+
+#### Requirements
+
+| ID | Requirement | Priority |
+|----|-------------|----------|
+| R18.1 | Reflection (R15) MUST extract explicit agent commitments from conversation | Must |
+| R18.2 | Commitments stored with: action, due_date (if stated), user_id, tenant_id | Must |
+| R18.3 | Due commitments generate events in user's event queue (type: `agent_commitment_due`) | Must |
+| R18.4 | On session start, agent checks for due/overdue commitments and surfaces them | Must |
+| R18.5 | Fulfilled commitments marked complete (not re-surfaced) | Should |
+| R18.6 | Agent SHOULD NOT make commitments it cannot fulfill (no scheduling if scheduler unavailable) | Should |
+
+#### Commitment Lifecycle
+
+```
+Agent says "I'll remind them Monday"
+  → Reflection extracts: {action: "remind marketing", due: "Monday"}
+  → Stored in user state doc (R16) under pending_actions with source: "agent_committed"
+  → Monday: scheduler pushes event_queue entry (type: agent_commitment_due)
+  → Next session: agent sees commitment in opener, executes or acknowledges
+  → After execution: removed from pending_actions
+```
+
+### R19: Memory Hierarchy Formalization
+
+**Problem:** Memory access is ad-hoc — each component queries different endpoints with different parameters. No formal model of what lives where, what takes precedence, or what lifetime each tier has.
+
+#### Memory Tiers
+
+| Tier | What | Lifetime | Storage | Access Pattern |
+|------|------|----------|---------|----------------|
+| **Working** | Conversation messages | Minutes (in-session) | In-memory list | Append + window (50 msgs) |
+| **Session** | Skill/playbook state, mode | Hours (TTL) | Redis via memory-svc | Get/set by session_id |
+| **User State** | Structured user doc | Days–weeks | Memory-svc (single record) | Read one doc, merge-update on session end |
+| **Episodic** | Session reflections | Weeks–months | Memory-svc (append-only) | Fetch latest N reflections |
+| **Semantic** | Facts, preferences | Permanent | pgvector | Vector similarity search |
+| **Procedural** | Skills, playbooks, patterns | Permanent (versioned) | Memory-svc | Fetch by ID |
+
+#### Requirements
+
+| ID | Requirement | Priority |
+|----|-------------|----------|
+| R19.1 | Memory MUST be organized into explicit tiers with defined lifetimes | Must |
+| R19.2 | Context builder MUST access tiers in priority order: user_state_doc → episodic → semantic | Must |
+| R19.3 | If a higher tier contains the information, lower tier queries SHOULD be skipped | Should |
+| R19.4 | Each tier has a defined eviction/compaction strategy | Should |
+| R19.5 | Working memory: 50-message window, no persistence beyond session | Must |
+| R19.6 | Episodic memory: last 5 reflections loaded, older ones accessible via search | Should |
+
+#### Precedence Rule
+
+When building the system prompt, the context builder resolves conflicts by tier priority:
+1. **User State Doc** (most recent, structured, deterministic) — primary source
+2. **Latest reflection** (what happened last session) — fills in detail
+3. **Semantic recall** (vector search) — fills gaps not covered by above
+4. **MCP resources** (live data) — always consulted for real-time status (readiness %, tasks)
+
+---
+
+## Task Types (additions for LLM gateway routing)
+
+| Task | Tier | Purpose |
+|------|:----:|---------|
+| `session_reflection` | fast | End-of-session distillation (bounded input, structured JSON output) |
+| `state_doc_update` | fast | Merge new reflection into user state document |
+
+---
+
+## Non-Requirements (explicitly out of scope for V2)
+
+- **Autonomous between-session execution**: The agent does not act without user present. Events queue; agent presents on next session.
+- **Real-time push notifications**: Events accumulate; users see them on next login, not via push.
+- **Reflection on every message**: Reflection runs once per session at end, not per-turn.
+- **Full episodic replay**: Reflections replace the need to replay old conversations cross-session.

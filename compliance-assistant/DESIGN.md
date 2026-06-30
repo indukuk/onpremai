@@ -491,3 +491,265 @@ The assistant never touches the database. All actions go through MCP. This means
 - The assistant works against any backend that implements MCP
 
 **Why:** Clean boundary. The assistant is pure LLM orchestration + prompt management. The backend is pure business logic. They communicate via a standard protocol.
+
+---
+
+## Shadow Agent V2: Persistent Intelligence Design
+
+### Architecture Change: Session Lifecycle with Reflection
+
+The V1 session lifecycle was: start → process messages → timeout/leave → state lost (only raw facts survive).
+
+V2 adds an explicit **reflection + state update** phase:
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant A as Agent Loop
+    participant R as Reflection Engine
+    participant SD as User State Doc
+    participant EQ as Event Queue
+    participant M as Memory Service
+
+    Note over U,M: Session Start
+    U->>A: POST /init (JWT)
+    A->>SD: Read user state doc
+    A->>EQ: Drain event queue
+    A->>M: Read latest reflection (episodic)
+    A->>A: Build context (state doc + events + live status)
+    A-->>U: Proactive opener with delta
+
+    Note over U,M: Mid-Session (unchanged)
+    U->>A: POST /chat
+    A->>A: Agent loop (LLM → tools → respond)
+    A-->>U: Response
+
+    Note over U,M: Session End (NEW)
+    U->>A: Goodbye signal OR session timeout
+    A-->>U: Final response (non-blocking)
+    A->>R: Run reflection (async, cheap tier)
+    R->>M: Store reflection (episodic)
+    R->>SD: Merge into user state doc
+    R->>EQ: Push commitment events (if due dates extracted)
+```
+
+### Component: Reflection Engine
+
+```mermaid
+graph TD
+    subgraph "Reflection Engine (src/agent/reflection.py)"
+        TRIGGER[Trigger Check<br/>msg_count >= 6 OR goodbye signal]
+        FORMAT[Format Conversation<br/>last 30 msgs, truncate tool results]
+        LLM[LLM Call<br/>task: session_reflection<br/>tier: fast]
+        PARSE[Parse Response<br/>accomplished, pending, commitments, preferences]
+        STORE[Store Results]
+    end
+
+    subgraph "Storage Destinations"
+        INTER[interaction_store<br/>type: session_reflection]
+        USER[user_store<br/>category: preference]
+        STATE[user_state_doc<br/>merge update]
+        EVENTS[event_queue<br/>commitment due dates]
+    end
+
+    TRIGGER -->|criteria met| FORMAT
+    FORMAT --> LLM
+    LLM --> PARSE
+    PARSE --> STORE
+    STORE --> INTER
+    STORE --> USER
+    STORE --> STATE
+    STORE --> EVENTS
+```
+
+### Component: User State Document
+
+The user state doc replaces scattered vector queries with a single deterministic read.
+
+```mermaid
+graph LR
+    subgraph "V1: Context Assembly (5+ queries)"
+        Q1[tenant_recall] --> CB[Context Builder]
+        Q2[user_recall] --> CB
+        Q3[interaction_recall tasks] --> CB
+        Q4[interaction_recall overdue] --> CB
+        Q5[MCP resources/read] --> CB
+    end
+
+    subgraph "V2: Context Assembly (2 reads + live data)"
+        SD[user_state_doc<br/>1 deterministic read] --> CB2[Context Builder V2]
+        MCP2[MCP resources/read<br/>live readiness data] --> CB2
+    end
+```
+
+#### Update Flow
+
+The user state doc is updated after every reflected session:
+
+```mermaid
+flowchart TD
+    REFL[Reflection output] --> MERGE{Merge Strategy}
+
+    MERGE --> |accomplished items| FOCUS[Update current_focus<br/>remove completed work]
+    MERGE --> |pending items| PENDING[Append to pending_actions<br/>with created_date]
+    MERGE --> |commitments| COMMIT[Append to pending_actions<br/>source: agent_committed]
+    MERGE --> |preferences| PREFS[Append to preferences<br/>deduplicate, cap at 10]
+    MERGE --> |session metadata| PATTERNS[Update working_patterns<br/>avg_session_length, time, skills]
+
+    FOCUS --> SAVE[Save merged doc]
+    PENDING --> SAVE
+    COMMIT --> SAVE
+    PREFS --> SAVE
+    PATTERNS --> SAVE
+
+    SAVE --> EVICT{Doc > 2000 chars?}
+    EVICT -->|Yes| COMPACT[Evict oldest pending_actions<br/>Summarize old patterns]
+    EVICT -->|No| DONE[Done]
+    COMPACT --> DONE
+```
+
+### Component: Event Queue
+
+Events flow from other services into the shadow agent's awareness:
+
+```mermaid
+graph TD
+    subgraph "Event Producers"
+        AE[agent-eval<br/>evaluation_completed<br/>readiness_changed]
+        PP[preprocessor<br/>evidence_uploaded]
+        SC[scheduler/cron<br/>deadline_approaching<br/>deadline_missed<br/>agent_commitment_due]
+        CA[compliance-assistant<br/>other user's agent<br/>escalation_triggered<br/>team_action]
+    end
+
+    subgraph "Memory Service"
+        EQ[(Event Queue<br/>per user+tenant<br/>max 50 events<br/>priority-sorted)]
+    end
+
+    subgraph "Shadow Agent"
+        INIT[/init handler]
+        CTX[Context Builder]
+        OPEN[Proactive Opener]
+    end
+
+    AE -->|POST /v1/event/push| EQ
+    PP -->|POST /v1/event/push| EQ
+    SC -->|POST /v1/event/push| EQ
+    CA -->|POST /v1/event/push| EQ
+
+    INIT -->|POST /v1/event/drain| EQ
+    EQ -->|events| CTX
+    CTX --> OPEN
+```
+
+#### Session Opener with Events
+
+The proactive opener changes from pure status to status + delta:
+
+```
+V1: "Good morning Sarah. 36 days to audit. Readiness: 72%. CC7.2 is 12 days overdue."
+
+V2: "Good morning Sarah. Since yesterday:
+  - CC6.1 re-evaluated: PASS (was PARTIAL) — readiness moved to 75%
+  - Marketing uploaded the access review logs you were waiting for
+  - CC8.1 evidence is due tomorrow
+
+  You committed to remind the marketing team today about CC7.2. Want me to send that now?"
+```
+
+### Component: Memory Hierarchy
+
+```mermaid
+graph TD
+    subgraph "Memory Tiers (access priority order)"
+        T1[Working Memory<br/>conversation_history<br/>lifetime: minutes<br/>50 messages max]
+        T2[Session Memory<br/>skill/playbook state, mode<br/>lifetime: hours TTL<br/>Redis via memory-svc]
+        T3[User State Doc<br/>structured user model<br/>lifetime: days-weeks<br/>single record, merge-updated]
+        T4[Episodic Memory<br/>session reflections<br/>lifetime: weeks-months<br/>append-only, last 5 loaded]
+        T5[Semantic Memory<br/>facts, preferences<br/>lifetime: permanent<br/>pgvector similarity search]
+        T6[Procedural Memory<br/>skills, playbooks, patterns<br/>lifetime: permanent versioned<br/>fetch by ID]
+    end
+
+    subgraph "Context Builder Resolution"
+        CB[Context Builder]
+    end
+
+    T3 -->|primary source| CB
+    T4 -->|fills in detail| CB
+    T5 -->|fills gaps| CB
+    T1 -->|current conversation| CB
+    T2 -->|active workflow state| CB
+    T6 -->|skill/playbook prompts| CB
+
+    CB --> SP[System Prompt]
+```
+
+### New Module Structure
+
+```mermaid
+graph TD
+    subgraph "compliance-assistant/src/agent/ (V2 additions)"
+        REFL[reflection.py<br/>session distillation]
+        STATE[state_doc.py<br/>user state CRUD + merge]
+        EVENTS[event_handler.py<br/>queue drain + formatting]
+    end
+
+    subgraph "Existing (modified)"
+        LOOP[loop.py<br/>+ reflection trigger at session end]
+        CTX[context_builder.py<br/>+ state doc read + events]
+        MAIN[main.py<br/>+ async reflection on goodbye]
+    end
+
+    LOOP --> REFL
+    REFL --> STATE
+    CTX --> STATE
+    CTX --> EVENTS
+```
+
+### Data Flow: Returning User (V2)
+
+```mermaid
+flowchart TD
+    START[Sarah opens chat next day] --> INIT[POST /init with JWT]
+
+    INIT --> PAR{Parallel fetch}
+    PAR -->|1| SD[user_state_doc<br/>"Focus: SOC2 CC6.x/CC8.x<br/>Last: uploaded CC6.1, deferred CC8.1<br/>Pending: CC8.1 logs, remind marketing<br/>Prefs: bullet points, show % impact"]
+    PAR -->|2| EQ[event_queue drain<br/>3 events since yesterday]
+    PAR -->|3| RD[MCP: readiness resource<br/>75% ready (was 72%)]
+
+    SD --> BUILD[Context Builder V2]
+    EQ --> BUILD
+    RD --> BUILD
+
+    BUILD --> PROMPT[System Prompt includes:<br/>"Sarah's focus: SOC2 CC6.x/CC8.x<br/>Since last session: CC6.1 passed, readiness +3%,<br/>marketing uploaded CC7.2 logs, CC8.1 due tomorrow.<br/>Agent commitment due: remind marketing today.<br/>Preferences: bullet points, show % impact."]
+
+    PROMPT --> LLM[LLM Gateway<br/>task: chat_response]
+    LLM --> RESP["Good morning Sarah. Since yesterday:<br/>• CC6.1 passed re-evaluation — readiness now 75%<br/>• Marketing uploaded CC7.2 access review logs<br/>• CC8.1 evidence due tomorrow<br/><br/>I committed to remind marketing about CC7.2 today.<br/>Want me to send that now, or tackle CC8.1 first?"]
+
+    RESP --> USER[User]
+```
+
+### Design Decisions (V2 additions)
+
+#### 7. Reflection is cheap and lossy, not perfect
+
+Reflection uses the fast tier and accepts imperfect extraction. A missed preference is fine — it'll be captured next session. The alternative (expensive strong-tier reflection) defeats the purpose of low-cost cross-session intelligence.
+
+**Why:** The value is in the accumulation over many sessions, not perfection in one. 80% recall per session compounds to near-complete user understanding over 10 sessions.
+
+#### 8. User state doc is code-updated, not LLM-updated
+
+The merge logic for user state docs is deterministic Python code (append to list, deduplicate, cap at max, evict oldest). The LLM generates the reflection; code applies it to the doc.
+
+**Why:** LLMs are unreliable at structured document updates (they hallucinate fields, forget to preserve existing entries). Deterministic merge is correct by construction. The LLM's job is insight extraction; the code's job is state management.
+
+#### 9. Events are fire-and-forget from producers
+
+Services push events without knowing if the user will ever see them. No acknowledgment protocol, no retry, no guaranteed delivery. Events are best-effort notifications, not transactions.
+
+**Why:** The event queue is a UX enhancement, not a correctness requirement. If an event is lost, the user still sees current status via MCP resources. Events provide *delta awareness* ("what changed"), not *state* ("what is").
+
+#### 10. No autonomous between-session execution
+
+The shadow agent does NOT act between sessions. It accumulates awareness (events, commitments) and presents them proactively, but waits for the user to approve action. The "remind marketing" commitment surfaces as a suggestion, not an automatic send.
+
+**Why:** Trust. Users must feel the agent is their delegate, not an autonomous actor. Proactive suggestion ("Want me to send this?") builds trust; autonomous action ("I sent it for you") erodes it — especially for compliance work where audit trails matter.

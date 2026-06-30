@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-AWS-first AI agent system for compliance SaaS, adapter-decoupled for future on-prem/hybrid deployments. Deploys as Docker Compose, uses Bedrock for LLM inference (with adapter layer for provider portability). **Implemented** — all services have full Python source, Dockerfiles, docker-compose.yml, Terraform infrastructure, and unit tests.
+AWS-first AI agent system for compliance SaaS, adapter-decoupled for future on-prem/hybrid deployments. Deploys as Docker Compose, uses Bedrock for LLM inference (with adapter layer for provider portability). All services are fully implemented with Python source, Dockerfiles, docker-compose.yml, Terraform infrastructure, and unit tests.
 
 This repo is the **AI layer only**. The broader platform handles GRC features (policy management, vendor risk, dashboards). The AI layer provides intelligent evaluation, assistance, and autonomous coordination. The core concept is "Shadow AI" — every user gets a personal agent that does compliance work on their behalf with zero compliance knowledge required.
 
@@ -14,18 +14,13 @@ This repo is the **AI layer only**. The broader platform handles GRC features (p
 - **Adapter layer**: `common/` clients use adapters (S3Adapter/MinIOAdapter, etc.) — switch via env vars, zero code changes
 - **Per-tenant budget tracking**: one customer's credit exhaustion never affects others; system degrades gracefully (rules-only eval, data-only assistant, indefinite queue)
 
-## Current State
+## Key Documentation Pointers
 
-- All services have `REQUIREMENTS.md` and `DESIGN.md` — these are the source of truth for implementation
-- All services implemented with 199 source files, 51 test files, Terraform infrastructure, and deploy script
-- `tests/` has unit tests for all services (pytest + pytest-asyncio)
-- `infrastructure/` has Terraform modules for full AWS deployment
-- `deploy.sh` deploys to a fresh AWS account (VPC, ECS, RDS, Redis, S3, Cognito)
-- `requirements/README.md` has the full system context and build order
-- `requirements/frameworks-modules-design.md` has per-service file trees, Dockerfile template, dependency lists, and code patterns
-- `requirements/security-auth-design.md` has JWT validation, RBAC, RLS, S2S auth details
-- `compliance-assistant/SKILLS.md` defines the full skill catalog (15 categories, role-based)
-- Playwright MCP server is configured (`.mcp.json`) for E2E testing
+- `requirements/README.md` — full system context and build order
+- `requirements/frameworks-modules-design.md` — per-service file trees, Dockerfile template, dependency lists, code patterns
+- `requirements/security-auth-design.md` — JWT validation, RBAC, RLS, S2S auth details
+- `compliance-assistant/SKILLS.md` — full skill catalog (15 categories, role-based)
+- Each service has `REQUIREMENTS.md` and `DESIGN.md` as source of truth for implementation
 
 ## Technology Stack
 
@@ -47,92 +42,117 @@ This repo is the **AI layer only**. The broader platform handles GRC features (p
 | Testing | pytest + pytest-asyncio | 8.0+ |
 | Containers | Docker multi-stage, python:3.12-slim base |
 
-## Build Order (Implementation Sequence)
-
-Each step depends on the previous:
-
-1. `common/` — shared client libraries (everything depends on these)
-2. `llm-gateway` — enables LLM-agnostic development of everything else
-3. `memory-service` — enables shared state and per-user context
-4. `sandbox-service` — code execution, needed by agent-eval
-5. `agent-eval` — 3-layer evaluation pipeline
-6. `compliance-assistant` — Shadow AI + inter-agent messaging + skills/playbooks
-7. `preprocessor` — file ingestion
-8. `observer` — needs gateway logs + memory to be operational
-9. `docker-compose.yml` + deployment configs
-
-## Build & Run Commands (Target)
+## Build & Run Commands
 
 ```bash
-# Build a single service
-docker build --platform linux/amd64 --provenance=false -t onpremai/{service}:dev ./{service}
-
 # Build all services
 docker compose build
 
-# Run the full stack
+# Build a single service (Dockerfile context is repo root, not service dir)
+docker build --platform linux/amd64 --provenance=false -t onpremai/{service}:dev -f {service}/Dockerfile .
+
+# Run the full stack (infra: postgres:5432, redis:6379, minio:9000/9001)
 docker compose up -d
 
-# Run with local LLM (Ollama)
-docker compose --profile local-llm up -d
-
 # Upgrade single service (zero-downtime for others)
-EVAL_VERSION=1.5.1 docker compose up -d --no-deps agent-eval
+docker compose up -d --no-deps {service}
 
-# Swap LLM model (no rebuild)
-vim config/routing.yaml && docker compose restart llm-gateway
+# Swap LLM model (no rebuild — config hot-reloads)
+# Edit config/routing.yaml, then: docker compose restart llm-gateway
 ```
 
-## AWS Deployment
+## Test Commands
+
+Tests run from repo root. No pytest.ini exists — no central config needed.
 
 ```bash
-# Deploy to AWS (fresh account)
-./deploy.sh dev    # Creates VPC, ECS, RDS, Redis, S3, ECR, Cognito, ALB
-
-# Deploy specific environment
-./deploy.sh prod
-
-# Update single service image
-cd infrastructure && terraform apply -var-file=environments/dev.tfvars \
-  -var='service_image_tags={"llm-gateway":"v1.2.3"}' -target=module.llm_gateway
-```
-
-## Test Commands (Target)
-
-```bash
-# Unit tests for one service
-python -m pytest tests/{service}/ -v
-
 # Run all tests
 python -m pytest tests/ -v
+
+# Run tests for one service (use underscores in dir name)
+python -m pytest tests/llm_gateway/ -v
+python -m pytest tests/agent_eval/ -v
+python -m pytest tests/common/ -v
+
+# Run a single test file
+python -m pytest tests/llm_gateway/test_resolver.py -v
+
+# Run a single test
+python -m pytest tests/llm_gateway/test_budget.py::TestBudgetTracker::test_daily_limit -v
 
 # With coverage
 python -m pytest tests/ -v --cov=src --cov-report=term-missing
 
-# Integration tests (needs Docker)
-python -m pytest tests/integration/ -v
+# E2E tests (full docker compose stack must be running)
+python -m pytest tests/e2e/ -v
 
-# Lint + format
-ruff check src/ tests/ && ruff format --check src/ tests/
+# Lint + format check
+ruff check . && ruff format --check .
 
-# Syntax validation
+# Syntax validation for a single file
 python -c "import ast; ast.parse(open('{file}').read())"
+```
+
+### Writing New Tests
+
+Each test file must add its service to `sys.path` because services aren't installed as packages. The path goes in `conftest.py`:
+```python
+import sys
+from pathlib import Path
+# parents[2] lands at repo root, then into the hyphenated service dir
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "llm-gateway"))
+```
+
+Service code then imports with the `src.` prefix (matching the Docker layout):
+```python
+from src.models import CompletionRequest
+from src.routing.resolver import RouteResolver
+```
+
+**Naming gotcha**: service dirs use hyphens (`llm-gateway/`), test dirs use underscores (`tests/llm_gateway/`).
+
+Async tests require `@pytest.mark.asyncio` decorator. Fixtures are in per-service `conftest.py` files under `tests/{service}/`. Test fixtures live in `testdata/` (evidence files, framework definitions, tenant/user JSON).
+
+## AWS Deployment
+
+```bash
+# Deploy to AWS (fresh account — creates VPC, ECS, RDS, Redis, S3, ECR, Cognito, ALB)
+./deploy.sh dev
+
+# Deploy production
+./deploy.sh prod
+
+# Update single service image via Terraform
+cd infrastructure && terraform apply -var-file=environments/dev.tfvars \
+  -var='service_image_tags={"llm-gateway":"v1.2.3"}' -target=module.llm_gateway
 ```
 
 ## Architecture
 
-8 services, each independently deployable via Docker Compose:
+8 services + static frontend, each independently deployable via Docker Compose:
 
 | Service | Port | Role |
 |---------|------|------|
 | `llm-gateway` | 4000 (agent), 4001 (admin) | Model routing, escalation, 7 provider adapters |
 | `memory-service` | 5000 | Shared memory with pgvector (user/tenant/task/eval/patterns/skills) |
-| `observer` | 9000 | Autonomous improvement agent (tunes routing via admin API) |
+| `observer` | 9000 (host: 9002) | Autonomous improvement agent (tunes routing via admin API) |
 | `sandbox-service` | 6000 | Isolated code execution in ephemeral containers (docker-compose override) |
 | `preprocessor` | 7000 | File ingestion (Excel/PDF/Word → metadata) |
 | `compliance-assistant` | 8081 | User-facing Shadow AI (persona-based, skills/playbooks) |
 | `agent-eval` | 8080 | Compliance evaluation engine (3-layer deterministic pipeline) |
 | `common/` | — | Shared client libraries copied into each service image |
+| `frontend/` | — | Static HTML/JS/CSS UI (vanilla JS, no build step) |
+
+### Import Paths in Docker
+
+All Dockerfiles set `PYTHONPATH=/app`. The resulting layout is:
+```
+/app/
+├── common/    → from common import LLMClient, AgentLogger
+├── src/       → from src.models import CompletionRequest
+└── config/    → (llm-gateway only, mounted read-only)
+```
+Service-internal imports always use the `src.` prefix. Cross-service shared code uses `common.` prefix.
 
 ### Inter-Service Communication
 
@@ -170,13 +190,13 @@ data = storage.get_json("tenant/evidence/control/metadata.json")
 
 logger = AgentLogger(agent_name="agent-eval")
 logger.info("Control evaluated", control_id="CC6.1", duration_ms=4200)
-```
 
 registry = RegistryClient()
 await registry.register(agent_type="agent-eval", version="1.5.0", capabilities=[...], endpoint="...")
 agents = await registry.discover(task="evaluate_vendor", tenant_id="acme-corp")
 # Returns: sorted list of healthy agents with capacity
 # Soft dependency: system works without registry (direct HTTP fallback)
+```
 
 Exception hierarchy: `CommonError` → `LLMUnavailableError`, `LLMTimeoutError`, `LLMCreditExhaustedError`, `StorageError`, `StorageNotFoundError`, `SandboxError`, `StateError`
 
@@ -248,14 +268,17 @@ Applied in this order on every request:
 - ALL external calls use `httpx.AsyncClient` (never `requests` in async context)
 - Configuration via `pydantic_settings.BaseSettings` with env var defaults that work with docker-compose
 - Every service has `/health` and `/ready` endpoints
-- PII-aware structured JSON logging via `common.logger.AgentLogger` — operational logs are PII-free, audit trail preserves full data
+- PII-aware structured JSON logging via `common.logging.logger.AgentLogger` — operational logs are PII-free, audit trail preserves full data
 - Use `PII()` wrapper for any field containing user data (emails, names): `logger.info("Sent", assignee=PII("john@acme.com"))`
-- `common/` is COPY'd into each Docker image (not a pip package) — rebuild all images when common/ changes
-- LLM Gateway config is a single YAML file (`config/routing.yaml`) with hot-reload
+- `common/` is COPY'd into each Docker image at `/app/common/` (not a pip package) — rebuild all images when common/ changes
+- Dockerfiles use repo root as build context: `docker build -f {service}/Dockerfile .` — this allows `COPY common/ ./common/` and `COPY {service}/src/ ./src/`
+- LLM Gateway config is a single YAML file (`config/routing.yaml`) with hot-reload via watchdog
 - Clients are thread-safe — instantiate once at startup, share across all requests
 - Startup sequence: log pass/fail per dependency check, emit fix hints on failure (see `requirements/observability.md` R1-R2)
-- Dockerfile pattern: multi-stage build, non-root `appuser`, single uvicorn worker (horizontal scaling via task count, not workers)
+- Dockerfile pattern: multi-stage build, non-root `appuser`, `PYTHONPATH=/app`, single uvicorn worker (horizontal scaling via task count, not workers)
 - Service discovery: Cloud Map DNS (`{service}.onpremai.internal`) in ECS; `http://{service}:{port}` in Docker Compose
+- Each service's `common/` symlink or copy in the source tree is only for local dev — Docker build copies from the real `common/` at repo root
+- LLM providers (in `llm-gateway/src/providers/`): `bedrock.py`, `anthropic.py`, `openai_compat.py` — all implement `ProviderAdapter` base class
 
 ## Rules
 

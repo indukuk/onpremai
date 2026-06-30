@@ -225,6 +225,9 @@ class ProcessingPipeline:
         # Step 8: Notify memory service (best-effort)
         await self._notify_memory(metadata)
 
+        # Step 9: Publish event for shadow agent notification (best-effort)
+        await self._publish_ingestion_event(metadata)
+
         record_processing(success=True)
         logger.info(
             "file_processed_successfully",
@@ -584,6 +587,44 @@ class ProcessingPipeline:
         except Exception as exc:
             logger.warning(
                 "memory_notification_failed",
+                file_key=metadata.file_key,
+                error=str(exc),
+            )
+
+    async def _publish_ingestion_event(self, metadata: FileMetadata) -> None:
+        """Push an event to the memory-service event queue for shadow agent notification.
+
+        Best-effort: failures are logged as warnings and never crash file processing.
+        """
+        if not self._settings.memory_url:
+            return
+
+        if not metadata.tenant_id:
+            return
+
+        try:
+            from common.clients import MemoryClient
+
+            memory = MemoryClient(memory_url=self._settings.memory_url)
+            try:
+                await memory.event_queue_push(
+                    user_id="__all__",
+                    tenant_id=metadata.tenant_id,
+                    event_type="evidence_uploaded",
+                    summary=f"New evidence uploaded: {metadata.filename} ({metadata.file_type.value})",
+                    priority="low",
+                    source_service="preprocessor",
+                    metadata={
+                        "filename": metadata.filename,
+                        "file_type": metadata.file_type.value,
+                        "storage_key": metadata.file_key,
+                    },
+                )
+            finally:
+                await memory.close()
+        except Exception as exc:
+            logger.warning(
+                "event_publish_failed",
                 file_key=metadata.file_key,
                 error=str(exc),
             )

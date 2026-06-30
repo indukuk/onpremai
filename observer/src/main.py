@@ -9,6 +9,7 @@ Orchestrates all observer components with lifespan management:
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from typing import Any, AsyncGenerator
 
@@ -18,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from common.auth.service_auth import ServiceAuthenticator
+from common.clients.memory_client import MemoryClient
 
 from observer.src.changes.applier import ChangeApplier
 from observer.src.changes.proposal import ChangeProposer
@@ -25,6 +27,7 @@ from observer.src.changes.rollback import RollbackEngine
 from observer.src.changes.validator import ChangeValidator
 from observer.src.circuit_breaker import CircuitBreaker
 from observer.src.config import ObserverSettings, get_settings
+from observer.src.deadline_checker import run_deadline_checker
 from observer.src.detection.aggregator import MetricAggregator
 from observer.src.detection.detector import IssueDetector
 from observer.src.detection.log_ingestor import LogIngestor
@@ -264,6 +267,34 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
     scheduler.start()
 
+    # Start deadline checker background task
+    deadline_task: asyncio.Task[None] | None = None
+    memory_client: MemoryClient | None = None
+
+    if settings.scheduler_enabled and settings.monitored_tenants.strip():
+        tenants = [t.strip() for t in settings.monitored_tenants.split(",") if t.strip()]
+        if tenants:
+            memory_client = MemoryClient(memory_url=settings.memory_url)
+            deadline_task = asyncio.create_task(
+                run_deadline_checker(
+                    memory=memory_client,
+                    tenants=tenants,
+                    interval=settings.deadline_check_interval_sec,
+                ),
+                name="deadline_checker",
+            )
+            logger.info(
+                "deadline_checker_enabled",
+                tenants=tenants,
+                interval_sec=settings.deadline_check_interval_sec,
+            )
+    else:
+        logger.info(
+            "deadline_checker_disabled",
+            scheduler_enabled=settings.scheduler_enabled,
+            has_tenants=bool(settings.monitored_tenants.strip()),
+        )
+
     # Initialize S2S authenticator for middleware
     app.state.service_authenticator = ServiceAuthenticator(settings)
 
@@ -296,6 +327,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Graceful shutdown
     logger.info("observer_shutting_down")
+
+    # Cancel deadline checker background task
+    if deadline_task is not None:
+        deadline_task.cancel()
+        try:
+            await deadline_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("deadline_checker_stopped")
+
+    if memory_client is not None:
+        await memory_client.close()
+
     scheduler.stop()
 
     await log_ingestor.close()

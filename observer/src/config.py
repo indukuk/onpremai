@@ -98,6 +98,11 @@ class ObserverSettings(BaseSettings):
     governance_report_weekly: bool = True
     governance_report_monthly: bool = True
 
+    # --- Deadline Checker ---
+    scheduler_enabled: bool = True
+    deadline_check_interval_sec: int = 3600
+    monitored_tenants: str = ""  # Comma-separated tenant IDs
+
     # --- Database ---
     db_path: str = "/data/observer.db"
 

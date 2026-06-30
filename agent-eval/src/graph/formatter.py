@@ -133,9 +133,32 @@ async def formatter_node(state: EvalGraphState) -> dict[str, Any]:
         cached=False,
     )
 
-    # Store in memory service
+    # Store in memory service and publish events
     memory = MemoryClient()
     try:
+        # Fetch previous evaluation to detect status changes
+        previous_status: ComplianceStatus | None = None
+        previous_score: float | None = None
+        try:
+            prev_results = await memory.eval_recall(
+                tenant_id=tenant_id,
+                framework=framework,
+                control_id=control_id,
+                limit=1,
+            )
+            if prev_results:
+                prev = prev_results[0]
+                prev_status_raw = prev.get("result", {}).get("status")
+                if prev_status_raw:
+                    previous_status = ComplianceStatus(prev_status_raw)
+                    previous_score = prev.get("result", {}).get("score")
+        except Exception as exc:
+            logger.warning(
+                "eval_recall_for_diff_failed",
+                error=str(exc),
+                trace_id=trace_id,
+            )
+
         await memory.eval_store(
             tenant_id=tenant_id,
             framework=framework,
@@ -147,6 +170,63 @@ async def formatter_node(state: EvalGraphState) -> dict[str, Any]:
                 "trace_id": trace_id,
             },
         )
+
+        # Publish evaluation_completed event
+        try:
+            await memory.event_queue_push(
+                user_id="__all__",
+                tenant_id=tenant_id,
+                event_type="evaluation_completed",
+                summary=f"{control_id} evaluated: {final_status.value}",
+                priority="medium",
+                source_service="agent-eval",
+                metadata={
+                    "control_id": control_id,
+                    "framework": framework,
+                    "status": final_status.value,
+                    "score": round(final_score, 4),
+                    "trace_id": trace_id,
+                },
+            )
+        except Exception as exc:
+            logger.warning(
+                "event_push_failed",
+                event_type="evaluation_completed",
+                error=str(exc),
+                trace_id=trace_id,
+            )
+
+        # Publish readiness_changed event if status differs from previous evaluation
+        if previous_status is not None and previous_status != final_status:
+            try:
+                await memory.event_queue_push(
+                    user_id="__all__",
+                    tenant_id=tenant_id,
+                    event_type="readiness_changed",
+                    summary=(
+                        f"{control_id} status changed: "
+                        f"{previous_status.value} -> {final_status.value}"
+                    ),
+                    priority="high",
+                    source_service="agent-eval",
+                    metadata={
+                        "control_id": control_id,
+                        "framework": framework,
+                        "previous_status": previous_status.value,
+                        "new_status": final_status.value,
+                        "previous_score": round(previous_score, 4) if previous_score is not None else None,
+                        "new_score": round(final_score, 4),
+                        "trace_id": trace_id,
+                    },
+                )
+            except Exception as exc:
+                logger.warning(
+                    "event_push_failed",
+                    event_type="readiness_changed",
+                    error=str(exc),
+                    trace_id=trace_id,
+                )
+
     except Exception as exc:
         logger.warning(
             "eval_store_failed",

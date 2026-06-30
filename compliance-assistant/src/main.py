@@ -25,7 +25,10 @@ from common.auth.rbac import get_current_user
 from common.clients import LLMClient, MemoryClient
 from common.logging.logger import configure_logging
 from src.agent.context_builder import ContextBuilder
+from src.agent.event_queue import EventQueueHandler
 from src.agent.loop import AgentLoop
+from src.agent.reflection import SessionReflector
+from src.agent.user_state import UserStateManager
 from src.config import settings
 from src.health import mark_tools_loaded, router as health_router
 from src.mcp.client import MCPClient
@@ -85,6 +88,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     context_builder = ContextBuilder(memory=_memory, mcp=_mcp)
     confirmation_handler = ConfirmationHandler(mcp=_mcp)
 
+    # V2: Shadow agent persistent intelligence
+    reflector = SessionReflector(llm=_llm, memory=_memory)
+    user_state_mgr = UserStateManager(memory=_memory)
+    event_handler = EventQueueHandler(memory=_memory)
+
     _agent_loop = AgentLoop(
         llm=_llm,
         memory=_memory,
@@ -95,6 +103,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         skill_matcher=skill_matcher,
         playbook_engine=playbook_engine,
         confirmation_handler=confirmation_handler,
+        reflector=reflector,
+        user_state_mgr=user_state_mgr,
+        event_handler=event_handler,
     )
 
     # Attempt initial tool discovery

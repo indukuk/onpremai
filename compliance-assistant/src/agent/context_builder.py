@@ -1,11 +1,13 @@
 """Build dynamic system prompt per role + user context from memory.
 
 The context builder assembles a multi-layered system prompt:
-1. Persona identity (role-specific agent behavior)
-2. Current status (readiness, timeline)
-3. User context (name, preferences, history)
-4. Priorities (tasks, overdue items)
-5. Active skill/playbook step (if any)
+1. Persona identity (role-specific agent behavior, with user-chosen name)
+2. Events since last session (from event queue)
+3. Current status (readiness, timeline)
+4. User context (from user state doc or vector recall fallback)
+5. Priorities (tasks, overdue items)
+6. Active skill/playbook step (if any)
+7. Behavior rules
 """
 
 from __future__ import annotations
@@ -15,7 +17,8 @@ from typing import Any
 import structlog
 
 from common.clients import MemoryClient
-from src.agent.personas import Persona, select_persona
+from src.agent.personas import Persona, get_agent_display_name, select_persona
+from src.agent.user_state import UserStateDoc
 from src.mcp.client import MCPClient
 from src.models import SessionState, UserContext
 
@@ -35,53 +38,75 @@ class ContextBuilder:
         session: SessionState,
         active_skill_prompt: str = "",
         playbook_step_prompt: str = "",
+        user_state: UserStateDoc | None = None,
+        events: list[dict[str, Any]] | None = None,
     ) -> str:
         """Assemble the complete system prompt for the current turn.
 
-        Fetches user memory, tenant facts, tasks, and readiness data,
-        then composes them into a structured prompt.
+        Uses user state doc as primary context source (R19). Falls back
+        to vector recall queries if state doc is unavailable.
         """
         persona = select_persona(user.role)
+        agent_name = get_agent_display_name(
+            persona, user_state.agent_name if user_state else ""
+        )
 
-        # Fetch context in parallel-ish (sequential for simplicity, could asyncio.gather)
+        # Always fetch live data
         tenant_facts = await self._memory.tenant_recall(
             tenant_id=user.tenant_id,
             query="audit schedule environment framework",
             top_k=5,
         )
-        user_facts = await self._memory.user_recall(
-            user_id=user.user_id,
-            query="preferences responsibilities history",
-            top_k=5,
-        )
+        readiness = await self._fetch_readiness(user)
+
+        # Use user state doc if available; otherwise fall back to vector recall
+        if user_state:
+            user_facts: list[dict[str, Any]] = []
+        else:
+            user_facts = await self._memory.user_recall(
+                user_id=user.user_id,
+                query="preferences responsibilities history",
+                top_k=5,
+            )
+
         tasks = await self._fetch_tasks(user)
         overdue = await self._fetch_overdue(user)
-        readiness = await self._fetch_readiness(user)
 
         # Build the prompt
         prompt_parts: list[str] = []
 
-        # Layer 1: Persona identity
-        prompt_parts.append(self._build_identity_section(persona, user, tenant_facts))
+        # Layer 1: Persona identity (with custom agent name)
+        prompt_parts.append(
+            self._build_identity_section(persona, user, tenant_facts, agent_name)
+        )
 
-        # Layer 2: Current status
+        # Layer 2: Events since last session
+        if events:
+            events_section = self._build_events_section(events)
+            if events_section:
+                prompt_parts.append(events_section)
+
+        # Layer 3: Current status
         prompt_parts.append(self._build_status_section(readiness, tenant_facts))
 
-        # Layer 3: User context
-        prompt_parts.append(self._build_user_section(user, user_facts))
+        # Layer 4: User context (from state doc or vector recall)
+        if user_state:
+            prompt_parts.append(self._build_user_section_from_state(user, user_state))
+        else:
+            prompt_parts.append(self._build_user_section(user, user_facts))
 
-        # Layer 4: Priorities
+        # Layer 5: Priorities
         prompt_parts.append(self._build_priorities_section(tasks, overdue, persona))
 
-        # Layer 5: Active skill (if any)
+        # Layer 6: Active skill (if any)
         if active_skill_prompt:
             prompt_parts.append(f"## Active Skill\n{active_skill_prompt}")
 
-        # Layer 6: Playbook step (if any)
+        # Layer 7: Playbook step (if any)
         if playbook_step_prompt:
             prompt_parts.append(f"## Current Playbook Step\n{playbook_step_prompt}")
 
-        # Layer 7: Behavior rules
+        # Layer 8: Behavior rules
         prompt_parts.append(self._build_behavior_section(persona))
 
         return "\n\n".join(prompt_parts)
@@ -147,9 +172,9 @@ class ContextBuilder:
         persona: Persona,
         user: UserContext,
         tenant_facts: list[dict[str, Any]],
+        agent_name: str = "",
     ) -> str:
         """Build the identity section of the system prompt."""
-        # Extract company name from tenant facts (sanitized to prevent injection)
         company_name = "the organization"
         audit_date = "TBD"
         framework = "compliance"
@@ -172,7 +197,8 @@ class ContextBuilder:
             assigned_controls=assigned_controls,
         )
 
-        return f"## Your Identity\n{template}"
+        name_line = f"Your name is {agent_name}.\n" if agent_name else ""
+        return f"## Your Identity\n{name_line}{template}"
 
     def _build_status_section(
         self,
@@ -262,6 +288,57 @@ class ContextBuilder:
 
         if not tasks and not overdue:
             lines.append("No pending tasks found.")
+
+        return "\n".join(lines)
+
+    def _build_user_section_from_state(
+        self,
+        user: UserContext,
+        state: UserStateDoc,
+    ) -> str:
+        """Build user section from structured user state doc (R16)."""
+        lines = [
+            "## About This User",
+            f"Name: {user.name or user.email or user.user_id}",
+            f"Role: {user.role}",
+        ]
+
+        if state.current_focus:
+            lines.append(f"Focus: {state.current_focus}")
+
+        if state.last_session:
+            lines.append(
+                f"Last session ({state.last_session.date}): {state.last_session.summary}"
+            )
+
+        if state.pending_actions:
+            pending_items = [pa.action for pa in state.pending_actions[:5]]
+            lines.append("Pending: " + " | ".join(pending_items))
+
+        if state.preferences:
+            lines.append("Preferences: " + ", ".join(state.preferences[:5]))
+
+        return "\n".join(lines)
+
+    def _build_events_section(self, events: list[dict[str, Any]]) -> str:
+        """Build events section from drained event queue (R17)."""
+        if not events:
+            return ""
+
+        lines = ["## Since Last Session"]
+        for event in events[:10]:
+            priority = event.get("priority", "medium")
+            summary = event.get("summary", "")
+            marker = "[!]" if priority == "high" else "-"
+            lines.append(f"{marker} {summary}")
+
+        commitments = [
+            e for e in events if e.get("event_type") == "agent_commitment_due"
+        ]
+        if commitments:
+            lines.append("\nYour commitments due:")
+            for c in commitments:
+                lines.append(f"  - {c.get('summary', '')}")
 
         return "\n".join(lines)
 

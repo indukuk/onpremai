@@ -333,6 +333,52 @@ class MemoryClient:
             return result
         return result.get("interactions", []) if isinstance(result, dict) else []
 
+    # --- User State Document ---
+
+    async def user_state_get(self, user_id: str, tenant_id: str) -> dict:
+        """Read user state document. Returns empty dict if not found or on failure."""
+        payload = {"user_id": user_id, "tenant_id": tenant_id}
+        result = await self._post_json("/v1/user-state/get", payload)
+        return result if isinstance(result, dict) else {}
+
+    async def user_state_put(self, user_id: str, tenant_id: str, data: dict) -> bool:
+        """Write user state document. Returns True on success."""
+        payload = {"user_id": user_id, "tenant_id": tenant_id, "data": data}
+        return await self._post("/v1/user-state/put", payload)
+
+    # --- Event Queue ---
+
+    async def event_queue_push(
+        self,
+        user_id: str,
+        tenant_id: str,
+        event_type: str,
+        summary: str,
+        priority: str = "medium",
+        source_service: str = "",
+        metadata: dict | None = None,
+    ) -> bool:
+        """Push an event to a user's queue. Returns True on success."""
+        payload: dict[str, Any] = {
+            "user_id": user_id,
+            "tenant_id": tenant_id,
+            "event_type": event_type,
+            "summary": summary,
+            "priority": priority,
+            "source_service": source_service,
+        }
+        if metadata is not None:
+            payload["metadata"] = metadata
+        return await self._post("/v1/event/push", payload)
+
+    async def event_queue_drain(self, user_id: str, tenant_id: str) -> list[dict]:
+        """Read and clear all events for a user. Returns [] on failure."""
+        payload = {"user_id": user_id, "tenant_id": tenant_id}
+        result = await self._post_json("/v1/event/drain", payload)
+        if isinstance(result, list):
+            return result
+        return result.get("events", []) if isinstance(result, dict) else []
+
     # --- Internal Helpers ---
 
     async def _post(self, path: str, payload: dict) -> bool:

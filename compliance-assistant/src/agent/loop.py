@@ -6,10 +6,17 @@ This is the core processing loop for the compliance assistant. It:
 3. Sends to LLM with available tools
 4. If LLM returns tool calls: execute them via MCP, append results
 5. Repeat until LLM responds with text (no tool calls) or max rounds hit
+
+V2 additions:
+- Loads user state doc and event queue on /init
+- Triggers session reflection on goodbye/session end
+- Handles agent naming on first launch
 """
 
 from __future__ import annotations
 
+import asyncio
+import re
 import time
 import uuid
 from typing import Any
@@ -20,6 +27,9 @@ from common.clients import LLMClient, MemoryClient
 from common.errors import LLMCreditExhaustedError, LLMUnavailableError
 from src.agent.context_builder import ContextBuilder
 from src.agent.data_only_mode import handle_data_only_message
+from src.agent.event_queue import EventQueueHandler
+from src.agent.reflection import SessionReflector, should_reflect
+from src.agent.user_state import UserStateManager
 from src.config import settings
 from src.mcp.client import MCPClient
 from src.mcp.confirmation import ConfirmationHandler
@@ -59,6 +69,9 @@ class AgentLoop:
         skill_matcher: SkillMatcher,
         playbook_engine: PlaybookEngine,
         confirmation_handler: ConfirmationHandler,
+        reflector: SessionReflector | None = None,
+        user_state_mgr: UserStateManager | None = None,
+        event_handler: EventQueueHandler | None = None,
     ) -> None:
         self._llm = llm
         self._memory = memory
@@ -69,6 +82,9 @@ class AgentLoop:
         self._skill_matcher = skill_matcher
         self._playbook_engine = playbook_engine
         self._confirmation = confirmation_handler
+        self._reflector = reflector
+        self._user_state_mgr = user_state_mgr
+        self._event_handler = event_handler
 
     async def handle_init(
         self,
@@ -77,8 +93,25 @@ class AgentLoop:
     ) -> ChatResponse:
         """Handle session initialization (/init endpoint).
 
-        Builds full context and generates a proactive opener via LLM.
+        V2: Loads user state doc, drains event queue, detects first launch
+        for agent naming, then generates proactive opener.
         """
+        # Load user state doc (R16)
+        user_state = None
+        if self._user_state_mgr:
+            user_state = await self._user_state_mgr.load(user.user_id, user.tenant_id)
+
+        # Detect first launch
+        if user_state is None:
+            session.is_first_launch = True
+        else:
+            session.agent_name = user_state.agent_name
+
+        # Drain event queue (R17)
+        events: list[dict[str, Any]] = []
+        if self._event_handler:
+            events = await self._event_handler.drain(user.user_id, user.tenant_id)
+
         # Load skills for this role
         skills = await self._skill_loader.load_for_role(
             role=user.role,
@@ -105,7 +138,7 @@ class AgentLoop:
                 tenant_id=user.tenant_id,
             )
 
-        # Build system prompt
+        # Build system prompt (with user state + events)
         active_skill_prompt = ""
         if session.active_skill:
             active_skill_prompt = await self._skill_loader.get_skill_prompt(
@@ -118,18 +151,30 @@ class AgentLoop:
             session=session,
             active_skill_prompt=active_skill_prompt,
             playbook_step_prompt=playbook_prompt,
+            user_state=user_state,
+            events=events,
         )
 
-        # Generate proactive opener via LLM
+        # First launch: inject naming instruction
+        if session.is_first_launch:
+            system_prompt += (
+                "\n\n## First Launch\n"
+                "This is a brand new user. Welcome them warmly and ask what they "
+                "would like to call you. You are their personal compliance agent — "
+                "let them pick a name for you. Keep it brief and friendly."
+            )
+
+        # Build opener message
+        opener_content = (
+            "This is the start of our session. "
+            "Greet me proactively with my current status and priorities."
+        )
+        if events and self._event_handler:
+            opener_content += "\n\n" + self._event_handler.format_for_opener(events)
+
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": (
-                    "This is the start of our session. "
-                    "Greet me proactively with my current status and priorities."
-                ),
-            },
+            {"role": "user", "content": opener_content},
         ]
 
         try:
@@ -203,14 +248,17 @@ class AgentLoop:
     ) -> ChatResponse:
         """Handle a user message through the full agent loop.
 
-        If in data_only mode, routes to keyword matching.
-        Otherwise, runs the LLM agent loop with tool execution.
+        V2: handles agent naming on first launch, triggers reflection at session end.
         """
         session.message_count += 1
 
         # Data-only mode bypass
         if session.mode == "data_only":
             return await self._handle_data_only(message, session, user)
+
+        # Agent naming flow: first launch, agent asked for a name, user responds
+        if session.is_first_launch and not session.agent_name:
+            return await self._handle_agent_naming(message, session, user)
 
         # Match skills / continue playbook
         skill_prompt, playbook_prompt = await self._resolve_skill_context(
@@ -234,7 +282,7 @@ class AgentLoop:
 
         # Run the agent loop
         try:
-            return await self._run_loop(session, user)
+            response = await self._run_loop(session, user)
         except LLMCreditExhaustedError as exc:
             session.mode = "data_only"
             await self._sessions.save(session)
@@ -268,6 +316,14 @@ class AgentLoop:
                 pending_confirmation=None,
                 data_only_mode=True,
             )
+
+        # Trigger reflection if session is ending (R15)
+        if self._reflector and should_reflect(session, message):
+            asyncio.create_task(
+                self._run_reflection(session, user)
+            )
+
+        return response
 
     async def handle_confirm(
         self,
@@ -531,6 +587,117 @@ class AgentLoop:
             actions=actions,
             pending_confirmation=None,
         )
+
+    async def _handle_agent_naming(
+        self,
+        message: str,
+        session: SessionState,
+        user: UserContext,
+    ) -> ChatResponse:
+        """Capture the agent name from user's response on first launch."""
+        # Extract name: strip quotes, punctuation, limit to 30 chars
+        name = re.sub(r'["\'.!?]', "", message).strip()[:30]
+
+        if not name:
+            name = "Assistant"
+
+        session.agent_name = name
+        session.is_first_launch = False
+
+        # Persist to user state doc
+        if self._user_state_mgr:
+            await self._user_state_mgr.set_agent_name(
+                user.user_id, user.tenant_id, name
+            )
+
+        # Add to conversation and generate acknowledgment
+        session.conversation_history.append({"role": "user", "content": message})
+
+        ack_prompt = (
+            f"The user has chosen to name you '{name}'. "
+            f"Acknowledge the name warmly (one sentence), then transition to "
+            f"showing their current compliance status and priorities."
+        )
+        session.conversation_history.append({"role": "user", "content": ack_prompt})
+
+        try:
+            response = await self._llm.complete(
+                messages=session.conversation_history,
+                task="chat_response",
+                tenant_id=user.tenant_id,
+                tools=self._format_tools_for_llm(session.tools_cache or []),
+                trace_id=str(uuid.uuid4()),
+            )
+
+            # Remove the synthetic prompt, keep the real message
+            session.conversation_history.pop()
+            session.conversation_history.append(
+                {"role": "assistant", "content": response.content}
+            )
+            await self._sessions.save(session)
+
+            return ChatResponse(
+                message=response.content,
+                session_id=session.session_id,
+                actions=[],
+                pending_confirmation=None,
+            )
+
+        except (LLMUnavailableError, LLMCreditExhaustedError):
+            session.conversation_history.pop()
+            fallback = f"{name} it is! Let me show you where things stand."
+            session.conversation_history.append(
+                {"role": "assistant", "content": fallback}
+            )
+            await self._sessions.save(session)
+
+            return ChatResponse(
+                message=fallback,
+                session_id=session.session_id,
+                actions=[],
+                pending_confirmation=None,
+            )
+
+    async def _run_reflection(
+        self,
+        session: SessionState,
+        user: UserContext,
+    ) -> None:
+        """Run session reflection and merge into user state doc. Fire-and-forget."""
+        try:
+            if not self._reflector:
+                return
+
+            reflection = await self._reflector.reflect(
+                session=session,
+                user_id=user.user_id,
+                tenant_id=user.tenant_id,
+            )
+
+            if reflection and self._user_state_mgr:
+                doc = await self._user_state_mgr.load(user.user_id, user.tenant_id)
+                if doc is None:
+                    from src.agent.user_state import UserStateDoc
+                    doc = UserStateDoc(
+                        user_id=user.user_id,
+                        tenant_id=user.tenant_id,
+                        agent_name=session.agent_name,
+                    )
+
+                doc = self._user_state_mgr.merge_reflection(
+                    doc=doc,
+                    reflection=reflection,
+                    active_skill=session.active_skill,
+                    message_count=session.message_count,
+                )
+                await self._user_state_mgr.save(doc)
+
+        except Exception as exc:
+            logger.warning(
+                "reflection_failed",
+                session_id=session.session_id,
+                error=str(exc),
+            )
 
     async def _handle_data_only(
         self,

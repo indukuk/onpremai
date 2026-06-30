@@ -93,3 +93,5 @@ class SessionState(BaseModel):
     skills_loaded: list[str] = Field(default_factory=list)
     tools_cache: list[dict[str, Any]] = Field(default_factory=list)
     message_count: int = 0
+    is_first_launch: bool = False
+    agent_name: str = ""

@@ -184,3 +184,10 @@ def select_persona(role: str) -> Persona:
     Falls back to REPORTER for unknown roles (most restrictive).
     """
     return PERSONA_MAP.get(role, REPORTER)
+
+
+def get_agent_display_name(persona: Persona, custom_name: str = "") -> str:
+    """Return the agent's display name: user-chosen name or persona default."""
+    if custom_name:
+        return custom_name
+    return persona.agent_name

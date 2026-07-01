@@ -102,6 +102,7 @@ services:
       ADMIN_PORT: "4001"
       AWS_REGION: us-east-1
       AWS_DEFAULT_REGION: us-east-1
+      LLM_GW_DEV_KEY: onpremai-dev-key-local
     volumes:
       - ./config:/app/config:ro
     depends_on:
@@ -135,6 +136,8 @@ services:
       DATABASE_URL: postgresql+asyncpg://onpremai:onpremai_dev@postgres:5432/onpremai
       REDIS_URL: redis://redis:6379/1
       SERVICE_PORT: "5000"
+      SERVICE_ID: memory-service
+      SERVICE_KEY: onpremai-dev-key-local
     depends_on:
       postgres:
         condition: service_healthy
@@ -214,6 +217,8 @@ services:
       REDIS_URL: redis://redis:6379/2
       LLM_GATEWAY_URL: http://llm-gateway:4000
       MEMORY_SERVICE_URL: http://memory-service:5000
+      SERVICE_ID: preprocessor
+      SERVICE_KEY: onpremai-dev-key-local
       AWS_REGION: us-east-1
       AWS_DEFAULT_REGION: us-east-1
     depends_on:
@@ -258,6 +263,8 @@ services:
       LLM_GATEWAY_URL: http://llm-gateway:4000
       MEMORY_SERVICE_URL: http://memory-service:5000
       SANDBOX_SERVICE_URL: http://sandbox-service:6000
+      SERVICE_ID: agent-eval
+      SERVICE_KEY: onpremai-dev-key-local
       AWS_REGION: us-east-1
       AWS_DEFAULT_REGION: us-east-1
     depends_on:
@@ -305,6 +312,8 @@ services:
       MEMORY_SERVICE_URL: http://memory-service:5000
       AGENT_EVAL_URL: http://agent-eval:8080
       PREPROCESSOR_URL: http://preprocessor:7000
+      SERVICE_ID: compliance-assistant
+      SERVICE_KEY: onpremai-dev-key-local
       AWS_REGION: us-east-1
       AWS_DEFAULT_REGION: us-east-1
     depends_on:
@@ -346,6 +355,8 @@ services:
       LLM_GATEWAY_URL: http://llm-gateway:4000
       LLM_GATEWAY_ADMIN_URL: http://llm-gateway:4001
       MEMORY_SERVICE_URL: http://memory-service:5000
+      SERVICE_ID: observer
+      SERVICE_KEY: onpremai-dev-key-local
       AWS_REGION: us-east-1
       AWS_DEFAULT_REGION: us-east-1
     depends_on:

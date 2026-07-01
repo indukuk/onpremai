@@ -319,17 +319,21 @@ async def lifespan(app: FastAPI):
 
 
 def _load_service_keys() -> None:
-    """Load service authentication keys.
+    """Load service authentication keys from environment.
 
-    In production, these come from Secrets Manager.
-    For development, accept from environment variables.
-    In production, refuses to start without explicit keys configured.
+    Configuration via env vars:
+    - LLM_GW_SERVICE_KEYS: comma-separated service_id:key pairs
+      Example: "agent-eval:secret1,compliance-assistant:secret2"
+    - LLM_GW_DEV_KEY: single shared key for all services (dev/test only)
+
+    Production/staging: LLM_GW_SERVICE_KEYS is required. Fails fast if missing.
+    Development: Falls back to LLM_GW_DEV_KEY, then to a default dev key with warning.
     """
     import os
 
     environment = os.environ.get("APP_ENV", os.environ.get("ENVIRONMENT", "development"))
 
-    # Accept comma-separated service:key pairs from env
+    # Primary: explicit per-service keys
     raw = os.environ.get("LLM_GW_SERVICE_KEYS", "")
     if raw:
         for pair in raw.split(","):
@@ -337,19 +341,35 @@ def _load_service_keys() -> None:
                 svc_id, svc_key = pair.split(":", 1)
                 _SERVICE_KEYS[svc_id.strip()] = svc_key.strip()
 
-    if environment == "production" and not _SERVICE_KEYS:
+    if _SERVICE_KEYS:
+        logger.info("service_keys_loaded", count=len(_SERVICE_KEYS), source="LLM_GW_SERVICE_KEYS")
+        return
+
+    # Production/staging: refuse to start without explicit keys
+    if environment in ("production", "staging", "prod"):
         raise RuntimeError(
-            "LLM_GW_SERVICE_KEYS must be configured in production. "
-            "Refusing to start without explicit service authentication keys."
+            "LLM_GW_SERVICE_KEYS must be configured in production/staging. "
+            "Set as comma-separated service_id:key pairs. "
+            "Example: LLM_GW_SERVICE_KEYS=agent-eval:key1,compliance-assistant:key2"
         )
 
-    # Allow dev keys only in non-production environments
-    if not _SERVICE_KEYS:
-        _SERVICE_KEYS["agent-eval"] = "dev-key"
-        _SERVICE_KEYS["compliance-assistant"] = "dev-key"
-        _SERVICE_KEYS["observer"] = "dev-key"
-        _SERVICE_KEYS["preprocessor"] = "dev-key"
-        _SERVICE_KEYS["memory-service"] = "dev-key"
+    # Development: use configurable shared dev key
+    dev_key = os.environ.get("LLM_GW_DEV_KEY", "")
+    dev_services = ["agent-eval", "compliance-assistant", "observer", "preprocessor", "memory-service"]
+
+    if dev_key:
+        for svc in dev_services:
+            _SERVICE_KEYS[svc] = dev_key
+        logger.info("service_keys_loaded", count=len(dev_services), source="LLM_GW_DEV_KEY")
+    else:
+        # Last resort: allow startup with a default dev key + warning
+        for svc in dev_services:
+            _SERVICE_KEYS[svc] = "onpremai-dev-key-change-me"
+        logger.warning(
+            "service_keys_using_default_dev_key",
+            environment=environment,
+            hint="Set LLM_GW_SERVICE_KEYS or LLM_GW_DEV_KEY in environment",
+        )
 
 
 # ---------------------------------------------------------------------------

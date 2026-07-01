@@ -73,15 +73,23 @@ class LLMClient:
         self,
         gateway_url: str | None = None,
         timeout: float = 120.0,
+        service_id: str | None = None,
+        service_key: str | None = None,
     ) -> None:
         self._gateway_url = (
             gateway_url or os.environ.get("LLM_GATEWAY_URL", "http://llm-gateway:4000")
         ).rstrip("/")
         self._timeout = timeout
+        self._service_id = service_id or os.environ.get("SERVICE_ID", "")
+        self._service_key = service_key or os.environ.get("SERVICE_KEY", "")
+        headers: dict[str, str] = {"Content-Type": "application/json"}
+        if self._service_id and self._service_key:
+            headers["X-Service-Id"] = self._service_id
+            headers["X-Service-Key"] = self._service_key
         self._http = httpx.AsyncClient(
             base_url=self._gateway_url,
             timeout=httpx.Timeout(timeout, connect=10.0),
-            headers={"Content-Type": "application/json"},
+            headers=headers,
         )
 
     @retry(max_attempts=2, base_delay=1.0, exceptions=(LLMTimeoutError,))

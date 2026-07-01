@@ -34,15 +34,23 @@ class MemoryClient:
         self,
         memory_url: str | None = None,
         timeout: float = 5.0,
+        service_id: str | None = None,
+        service_key: str | None = None,
     ) -> None:
         self._memory_url = (
             memory_url or os.environ.get("MEMORY_URL", "http://memory-service:5000")
         ).rstrip("/")
         self._timeout = timeout
+        sid = service_id or os.environ.get("SERVICE_ID", "")
+        skey = service_key or os.environ.get("SERVICE_KEY", "")
+        headers: dict[str, str] = {"Content-Type": "application/json"}
+        if sid and skey:
+            headers["X-Service-Id"] = sid
+            headers["X-Service-Key"] = skey
         self._http = httpx.AsyncClient(
             base_url=self._memory_url,
             timeout=httpx.Timeout(timeout, connect=3.0),
-            headers={"Content-Type": "application/json"},
+            headers=headers,
         )
 
     # --- Session Memory ---

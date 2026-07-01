@@ -120,7 +120,7 @@ class AgentLoop:
         session.skills_loaded = [s.get("id", s.get("skill_name", "")) for s in skills]
 
         # Load MCP tools
-        tools = await self._mcp.list_tools(jwt_token="")
+        tools = await self._mcp.list_tools(jwt_token=user.jwt_token)
         session.tools_cache = tools
 
         # Select persona
@@ -348,7 +348,7 @@ class AgentLoop:
         result = await self._confirmation.execute_confirmed(
             tool_name=session.pending_confirmation.tool_name,
             params=session.pending_confirmation.params,
-            jwt_token="",
+            jwt_token=user.jwt_token,
         )
 
         # Clear pending confirmation
@@ -510,7 +510,7 @@ class AgentLoop:
                 result = await self._mcp.call_tool(
                     tool_name=tool_name,
                     params=tool_params,
-                    jwt_token="",
+                    jwt_token=user.jwt_token,
                 )
                 tool_latency = round((time.perf_counter() - tool_start) * 1000, 2)
 

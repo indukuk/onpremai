@@ -174,7 +174,7 @@ async def handle_data_only_message(
         result = await mcp.call_tool(
             tool_name=intent.tool_name,
             params=intent.params,
-            jwt_token="",  # Uses session context
+            jwt_token=user.jwt_token,
         )
 
         if result.get("status") == "error":

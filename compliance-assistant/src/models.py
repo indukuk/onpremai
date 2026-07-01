@@ -15,6 +15,7 @@ class UserContext(BaseModel):
     role: str
     email: str = ""
     name: str = ""
+    jwt_token: str = ""
 
 
 class ChatRequest(BaseModel):

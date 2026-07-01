@@ -163,7 +163,7 @@ class ContextBuilder:
         """Fetch readiness data from MCP resources."""
         readiness_data = await self._mcp.read_resource(
             uri=f"tenant://{user.tenant_id}/frameworks/status",
-            jwt_token="",
+            jwt_token=user.jwt_token,
         )
         return readiness_data if isinstance(readiness_data, dict) else {}
 

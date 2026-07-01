@@ -38,6 +38,7 @@ class UserContext:
     email: str
     groups: list[str] = field(default_factory=list)
     token_exp: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
+    jwt_token: str = ""
 
 
 class CognitoTokenValidator:
@@ -137,6 +138,7 @@ class CognitoTokenValidator:
             email=email,
             groups=groups,
             token_exp=token_exp,
+            jwt_token=token,
         )
 
     async def _get_signing_key(self, kid: str) -> dict:
